@@ -2,6 +2,17 @@
 # Запуск десктоп-виджета. Локальный Tkinter подхватывается из ~/.local/opt/tk,
 # если системный python3-tk не установлен.
 cd "$(dirname "$0")" || exit 1
+
+# Один экземпляр: повторный клик по ярлыку не должен открывать второе окно.
+LOCK="${XDG_RUNTIME_DIR:-/tmp}/tokenpulse-widget.lock"
+if command -v flock >/dev/null 2>&1; then
+    exec 9>"$LOCK"
+    if ! flock -n 9; then
+        echo "Виджет уже запущен"
+        exit 0
+    fi
+fi
+
 TKROOT="${TK_ROOT:-$HOME/.local/opt/tk/usr}"
 if ! python3 -c "import tkinter" 2>/dev/null; then
     if [ -d "$TKROOT/lib/python3.10/tkinter" ]; then
