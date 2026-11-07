@@ -107,6 +107,7 @@
     <span class="muted" id="host">подключение…</span>
     <span class="spacer"></span>
     <input id="server" placeholder="http://IP:8787" style="display:none">
+    <input id="token" placeholder="API token" style="display:none">
     <button id="connect" style="display:none">Подключить</button>
     <span class="muted" id="lat"></span>
   </header>
@@ -219,16 +220,23 @@
 
 <script>
 const $ = id => document.getElementById(id);
-let server = new URLSearchParams(location.search).get("server") || "";
+const params = new URLSearchParams(location.search);
+let server = params.get("server") || "";
+let token = params.get("token") || localStorage.getItem("monitor.token") || "";
+if (token) localStorage.setItem("monitor.token", token);
 if (!server && location.protocol === "file:") {
   server = "http://127.0.0.1:8787";
-  $("server").style.display = ""; $("connect").style.display = "";
+  $("server").style.display = ""; $("token").style.display = "";
+  $("connect").style.display = "";
   $("server").value = localStorage.getItem("monitor.server") || server;
+  $("token").value = token;
   server = $("server").value;
 }
 $("connect")?.addEventListener("click", () => {
   server = $("server").value.trim().replace(/\/$/, "");
+  token = $("token").value.trim();
   localStorage.setItem("monitor.server", server);
+  localStorage.setItem("monitor.token", token);
 });
 
 const CIRC = 2 * Math.PI * 52;
@@ -330,7 +338,11 @@ function drawChart() {
 async function tick() {
   try {
     const t0 = performance.now();
-    const r = await fetch(server + "/api/stats", {cache: "no-store"});
+    const r = await fetch(server + "/api/stats", {
+      cache: "no-store",
+      headers: token ? {"X-Token": token} : {}
+    });
+    if (r.status === 401) throw new Error("401 unauthorized");
     const d = await r.json();
     const lat = Math.round(performance.now() - t0);
     const cpu = d.cpu || {}, gpu = d.gpu || {}, st = d.strata || {}, cf = d.comfyui || {};
@@ -429,7 +441,12 @@ async function tick() {
     $("cacheToday").textContent = human(today.reused);
   } catch (e) {
     $("dot").style.background = "var(--red)";
-    $("host").textContent = "нет связи";
+    if (String(e).includes("401")) {
+      $("host").textContent = "нужен токен API";
+      $("token").style.display = "";
+    } else {
+      $("host").textContent = "нет связи";
+    }
   }
   setTimeout(tick, 1000);
 }

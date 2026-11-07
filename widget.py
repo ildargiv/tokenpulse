@@ -31,7 +31,7 @@ import time
 import tkinter as tk
 from pathlib import Path
 from urllib.parse import urlparse
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 WINDOWS = os.name == "nt"
 if WINDOWS:
@@ -77,6 +77,7 @@ DEFAULTS = {
     "topmost": True,
     "collapsed": False,
     "daily_goal": 1_000_000,
+    "token": "",
     "x": None,
     "y": None,
 }
@@ -136,10 +137,11 @@ def save_config(cfg):
 # --------------------------------------------------------------------------- #
 
 class Fetcher(threading.Thread):
-    def __init__(self, url, interval=1.0):
+    def __init__(self, url, interval=1.0, token=""):
         super().__init__(daemon=True)
         self.url = url.rstrip("/")
         self.interval = max(0.4, float(interval))
+        self.token = token or ""
         self.data = None
         self.error = None
         self.latency = None
@@ -150,17 +152,22 @@ class Fetcher(threading.Thread):
     def stop(self):
         self._stop.set()
 
-    def set_url(self, url):
+    def set_url(self, url, token=None):
         with self._lock:
             self.url = url.rstrip("/")
+            if token is not None:
+                self.token = token
 
     def run(self):
         while not self._stop.is_set():
             with self._lock:
                 url = self.url
+                token = self.token
+            headers = {"X-Token": token} if token else {}
             t0 = time.perf_counter()
             try:
-                with urlopen(url + "/api/stats", timeout=2.5) as r:
+                req = Request(url + "/api/stats", headers=headers)
+                with urlopen(req, timeout=2.5) as r:
                     payload = json.loads(r.read().decode("utf-8", "replace"))
                 self.data = payload
                 self.error = None
@@ -436,7 +443,8 @@ class TokenPulse:
         self.hero = {"decode": "—", "decode_sub": "", "prefill": "—",
                      "power": "—", "power_sub": "", "gpu_sub": "", "cpu_sub": ""}
 
-        self.fetcher = Fetcher(self.url, self.cfg.get("interval", 1.0))
+        self.fetcher = Fetcher(self.url, self.cfg.get("interval", 1.0),
+                               self.cfg.get("token") or "")
         self.fetcher.start()
 
         self._build_ui()
@@ -934,7 +942,7 @@ class TokenPulse:
         w = tk.Toplevel(self.root)
         w.title("TokenPulse — настройки")
         w.configure(bg=BG)
-        w.geometry("400x230")
+        w.geometry("400x330")
         w.attributes("-topmost", True)
         w.resizable(False, False)
 
@@ -945,6 +953,15 @@ class TokenPulse:
         entry.insert(0, self.url)
         entry.pack(fill="x", padx=14, ipady=5)
         tk.Label(w, text="например: http://192.168.31.30:8787", bg=BG, fg=DIM,
+                 font=(FONT, 7)).pack(anchor="w", padx=14, pady=(3, 8))
+
+        tk.Label(w, text="Токен API (если задан на сервере)", bg=BG, fg=TEXT,
+                 font=(FONT, 9)).pack(anchor="w", padx=14, pady=(0, 4))
+        tok = tk.Entry(w, bg=PANEL2, fg=TEXT, insertbackground=AMBER,
+                       relief="flat", font=(MONO, 9), show="•")
+        tok.insert(0, self.cfg.get("token") or "")
+        tok.pack(fill="x", padx=14, ipady=5)
+        tk.Label(w, text="пусто, если агент запущен без TP_TOKEN", bg=BG, fg=DIM,
                  font=(FONT, 7)).pack(anchor="w", padx=14, pady=(3, 8))
 
         tk.Label(w, text="Цель дня, токенов (вход + выход)", bg=BG, fg=TEXT,
@@ -967,21 +984,24 @@ class TokenPulse:
             url = entry.get().strip().rstrip("/")
             if not url.startswith(("http://", "https://")):
                 url = "http://" + url
+            token = tok.get().strip()
             try:
                 g = max(1, int(float(goal.get().replace(" ", "").replace(",", ""))))
             except Exception:
                 g = int(self.cfg.get("daily_goal") or 1_000_000)
             self.url = url
             self.cfg["server"] = url
+            self.cfg["token"] = token
             self.cfg["daily_goal"] = g
             save_config(self.cfg)
-            self.fetcher.set_url(url)
+            self.fetcher.set_url(url, token)
             self._tried_agent = False
             w.destroy()
 
         ok.bind("<Button-1>", lambda e: save())
         cancel.bind("<Button-1>", lambda e: w.destroy())
         entry.bind("<Return>", lambda e: save())
+        tok.bind("<Return>", lambda e: save())
         goal.bind("<Return>", lambda e: save())
         entry.focus_set()
 
@@ -1382,9 +1402,14 @@ class TokenPulse:
 
         online = (now - self._last_data_time) < 5.0
         if not online:
-            if self.status.cget("text") != "нет связи":
-                self.status.config(text="нет связи", fg=RED)
-            if self.fetcher.error and now - self.fetcher.ok_at > 2.5:
+            err = self.fetcher.error or ""
+            if "401" in err:
+                txt, col = "нужен токен", AMBER
+            else:
+                txt, col = "нет связи", RED
+            if self.status.cget("text") != txt:
+                self.status.config(text=txt, fg=col)
+            if "401" not in err and self.fetcher.error and now - self.fetcher.ok_at > 2.5:
                 self._maybe_start_agent()
 
         for k in self.disp:

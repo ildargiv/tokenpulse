@@ -9,7 +9,7 @@ Runs on the GPU server, collects:
   * Strata  /metrics  (tok/s, queue, context, request history)
   * ComfyUI /system_stats + /queue
 
-Exposes an open JSON API (CORS *) and a small web page:
+Exposes a JSON API (CORS *, no auth by default; set TP_TOKEN to require a token):
   GET /api/stats    -> snapshot
   GET /api/health   -> {"ok": true}
   GET /             -> dashboard (web/index.html)
@@ -19,6 +19,7 @@ Works on Linux and Windows, Python 3.8+, standard library only.
 
 import argparse
 import glob
+import hmac
 import json
 import os
 import platform
@@ -32,9 +33,10 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import URLError
+from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 WINDOWS = os.name == "nt"
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(HERE, "web")
@@ -1059,6 +1061,7 @@ class Sampler(threading.Thread):
 class Handler(BaseHTTPRequestHandler):
     server_version = "StrataMonitor/" + VERSION
     sampler = None
+    token = ""
 
     def _headers(self, code=200, ctype="application/json; charset=utf-8"):
         self.send_response(code)
@@ -1069,11 +1072,43 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
 
+    # -- optional API token ---------------------------------------------------
+    # Empty token (the default) keeps the API open. When TP_TOKEN / --token is
+    # set, the client may pass it as ?token=..., X-Token: ... or
+    # Authorization: Bearer ...
+    def _request_token(self):
+        got = self.headers.get("X-Token") or ""
+        if not got:
+            auth = self.headers.get("Authorization") or ""
+            if auth.lower().startswith("bearer "):
+                got = auth[7:].strip()
+        if not got:
+            qs = parse_qs(urlsplit(self.path).query)
+            got = (qs.get("token") or [""])[0]
+        return got
+
+    def _authorized(self):
+        want = self.token or ""
+        if not want:
+            return True
+        return hmac.compare_digest(self._request_token(), want)
+
+    def _unauthorized(self):
+        body = json.dumps({"ok": False, "error": "unauthorized"},
+                          ensure_ascii=False).encode("utf-8")
+        self._headers(401)
+        self.wfile.write(body)
+
     def do_OPTIONS(self):
         self._headers(204)
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
+
+        if path in ("/api/stats", "/stats.json", "/api/tokens", "/tokens.json"):
+            if not self._authorized():
+                self._unauthorized()
+                return
 
         if path in ("/api/stats", "/stats.json"):
             body = json.dumps(self.sampler.snapshot(), ensure_ascii=False).encode("utf-8")
@@ -1088,7 +1123,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/health":
-            body = json.dumps({"ok": True, "version": VERSION}).encode("utf-8")
+            body = json.dumps({"ok": True, "version": VERSION,
+                               "auth": bool(self.token)}).encode("utf-8")
             self._headers()
             self.wfile.write(body)
             return
@@ -1141,10 +1177,13 @@ def main():
     ap.add_argument("--strata", default=os.environ.get("STRATA_URL", "http://127.0.0.1:8080"))
     ap.add_argument("--comfy", default=os.environ.get("COMFY_URL", "http://127.0.0.1:8188"))
     ap.add_argument("--interval", type=float, default=float(os.environ.get("MONITOR_INTERVAL", "1.0")))
+    ap.add_argument("--token", default=os.environ.get("TP_TOKEN", ""),
+                    help="optional API token; empty keeps the API open")
     args = ap.parse_args()
 
     sampler = Sampler(args.strata, args.comfy, args.interval)
     Handler.sampler = sampler
+    Handler.token = (args.token or "").strip()
     sampler.start()
 
     srv = ThreadingHTTPServer((args.host, args.port), Handler)
@@ -1154,6 +1193,7 @@ def main():
     print("  strata : %s" % args.strata)
     print("  comfy  : %s" % args.comfy)
     print("  local  : http://127.0.0.1:%d" % args.port)
+    print("  auth   : %s" % ("token required" if Handler.token else "open (no token)"))
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
