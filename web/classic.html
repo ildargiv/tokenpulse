@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TokenPulse Classic</title>
+<style>
+  :root{
+    --bg:#070b14; --panel:#0c1424; --panel2:#111c31; --track:#1b2942;
+    --stroke:#20304d; --text:#e8eefc; --dim:#6b7a96;
+    --cyan:#22d3ee; --green:#34d399; --pink:#f472b6; --amber:#fbbf24;
+    --violet:#a78bfa; --red:#fb7185;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{
+    background:
+      radial-gradient(900px 500px at 15% -10%, rgba(34,211,238,.16), transparent 60%),
+      radial-gradient(700px 500px at 110% 15%, rgba(244,114,182,.13), transparent 60%),
+      radial-gradient(800px 600px at 50% 120%, rgba(52,211,153,.10), transparent 60%),
+      var(--bg);
+    color:var(--text); font:14px/1.45 "Segoe UI",system-ui,sans-serif;
+    padding:26px 18px 40px;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; opacity:.25;
+    background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+    background-size:46px 46px;
+    mask-image:radial-gradient(circle at 50% 30%,#000 0%,transparent 75%);
+  }
+  .wrap{max-width:820px;margin:0 auto;position:relative}
+  header{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--cyan);
+       box-shadow:0 0 0 0 rgba(34,211,238,.7);animation:pulse 1.8s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,211,238,.55)}
+                   70%{box-shadow:0 0 0 12px rgba(34,211,238,0)}
+                   100%{box-shadow:0 0 0 0 rgba(34,211,238,0)}}
+  h1{font-size:16px;letter-spacing:.22em;margin:0;font-weight:700}
+  .muted{color:var(--dim);font-size:12px}
+  .spacer{flex:1}
+  input{background:var(--panel2);border:1px solid var(--stroke);color:var(--text);
+        border-radius:9px;padding:6px 9px;font:12px "DejaVu Sans Mono",monospace;width:210px}
+  button{background:rgba(34,211,238,.15);border:1px solid rgba(34,211,238,.4);
+         color:var(--cyan);border-radius:9px;padding:6px 11px;cursor:pointer;font-weight:700}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{background:linear-gradient(160deg,rgba(255,255,255,.04),rgba(255,255,255,.01));
+        border:1px solid var(--stroke);border-radius:18px;padding:16px;
+        backdrop-filter:blur(14px);box-shadow:0 18px 50px rgba(0,0,0,.35);
+        animation:rise .6s ease both}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .card h2{font-size:11px;letter-spacing:.16em;color:var(--dim);margin:0 0 12px;font-weight:700}
+  .gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:700px){.gauges{grid-template-columns:1fr}}
+  .gauge{display:flex;flex-direction:column;align-items:center;gap:8px}
+  svg.ring{width:124px;height:124px;transform:rotate(-90deg)}
+  svg.ring circle{fill:none;stroke-width:9;stroke-linecap:round}
+  svg.ring .tr{stroke:var(--track)}
+  svg.ring .gl{stroke-width:15;opacity:.22}
+  svg.ring .val{transition:stroke-dashoffset .45s ease}
+  .gv{font:700 20px "DejaVu Sans Mono",monospace}
+  .gs{font-size:10px;color:var(--dim);letter-spacing:.1em}
+  .bars{display:grid;gap:12px}
+  .srow{display:grid;grid-template-columns:132px 1fr 88px 74px;gap:10px;align-items:center}
+  @media(max-width:700px){.srow{grid-template-columns:110px 1fr 72px 64px}}
+  .sname{font-size:11px;letter-spacing:.08em;color:var(--dim);font-weight:700}
+  .track{height:10px;background:var(--track);border-radius:99px;overflow:hidden;position:relative}
+  .fill{height:100%;border-radius:99px;transition:width .45s ease,background .45s ease;
+        position:relative}
+  .fill::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);
+    transform:translateX(-100%);animation:shimmer 2.6s infinite}
+  @keyframes shimmer{to{transform:translateX(100%)}}
+  .heat{background-image:linear-gradient(90deg,#34d399 0%,#fbbf24 55%,#fb7185 100%)}
+  .heat .fill{background:rgba(7,11,20,.78)}
+  .sval{font:600 12px "DejaVu Sans Mono",monospace;text-align:right}
+  .stemp{font:700 13px "DejaVu Sans Mono",monospace;text-align:right}
+  .speed{display:flex;align-items:baseline;gap:26px;flex-wrap:wrap}
+  .speed .big{font:700 34px "DejaVu Sans Mono",monospace;line-height:1}
+  .unit{color:var(--dim);font-size:12px}
+  .chart{margin-top:12px;width:100%;height:110px;display:block}
+  .tokens{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:700px){.tokens{grid-template-columns:1fr}}
+  .tgroup .k{font-size:10px;letter-spacing:.16em;color:var(--dim)}
+  .trow{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px}
+  .trow .lbl{font-size:11px;color:var(--dim);letter-spacing:.08em}
+  .trow .num{font:700 21px "DejaVu Sans Mono",monospace}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .chip{font-size:11px;font-weight:700;letter-spacing:.05em;padding:4px 9px;border-radius:99px;
+        background:var(--panel2);border:1px solid var(--stroke);color:var(--dim)}
+  .chip.on{color:var(--green);border-color:rgba(52,211,153,.35)}
+  .chip.pink{color:var(--pink);border-color:rgba(244,114,182,.3)}
+  .chip.cyan{color:var(--cyan);border-color:rgba(34,211,238,.3)}
+  .metrics{display:flex;gap:22px;flex-wrap:wrap;margin-top:14px}
+  .metric .k{font-size:10px;color:var(--dim);letter-spacing:.12em}
+  .metric .v{font:600 15px "DejaVu Sans Mono",monospace;margin-top:2px}
+  .src{font-size:11px;color:var(--dim);font-family:"DejaVu Sans Mono",monospace}
+  .wide{grid-column:1/-1}
+  @media(max-width:620px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="dot" id="dot"></span>
+    <h1>TOKEN<span style="color:var(--cyan)">PULSE</span></h1>
+    <span class="muted" id="host">подключение…</span>
+    <span class="spacer"></span>
+    <input id="server" placeholder="http://IP:8787" style="display:none">
+    <input id="token" placeholder="API token" style="display:none">
+    <button id="connect" style="display:none">Подключить</button>
+    <span class="muted" id="lat"></span>
+  </header>
+
+  <div class="grid">
+    <section class="card wide">
+      <h2>ЗАГРУЗКА · КРУГОВЫЕ ДАТЧИКИ</h2>
+      <div class="gauges">
+        <div class="gauge">
+          <svg class="ring" viewBox="0 0 124 124">
+            <circle class="tr" cx="62" cy="62" r="52"/>
+            <circle class="gl" cx="62" cy="62" r="52" stroke="var(--cyan)"
+                    stroke-dasharray="326.7" stroke-dashoffset="326.7" id="gGlow"/>
+            <circle class="val" cx="62" cy="62" r="52" stroke="var(--cyan)"
+                    stroke-dasharray="326.7" stroke-dashoffset="326.7" id="gArc"/>
+          </svg>
+          <div class="gv" id="gPct">0%</div>
+          <div class="gs">ВИДЕОКАРТА</div>
+          <div class="gs" id="gName">GPU</div>
+        </div>
+        <div class="gauge">
+          <svg class="ring" viewBox="0 0 124 124">
+            <circle class="tr" cx="62" cy="62" r="52"/>
+            <circle class="gl" cx="62" cy="62" r="52" stroke="var(--green)"
+                    stroke-dasharray="326.7" stroke-dashoffset="326.7" id="cGlow"/>
+            <circle class="val" cx="62" cy="62" r="52" stroke="var(--green)"
+                    stroke-dasharray="326.7" stroke-dashoffset="326.7" id="cArc"/>
+          </svg>
+          <div class="gv" id="cPct">0%</div>
+          <div class="gs">ПРОЦЕССОР</div>
+          <div class="gs" id="cName">CPU</div>
+        </div>
+        <div class="gauge">
+          <svg class="ring" viewBox="0 0 124 124">
+            <circle class="tr" cx="62" cy="62" r="52"/>
+            <circle class="gl" cx="62" cy="62" r="52" stroke="var(--violet)"
+                    stroke-dasharray="326.7" stroke-dashoffset="326.7" id="pGlow"/>
+            <circle class="val" cx="62" cy="62" r="52" stroke="var(--violet)"
+                    stroke-dasharray="326.7" stroke-dashoffset="326.7" id="pArc"/>
+          </svg>
+          <div class="gv" id="pVal">0</div>
+          <div class="gs">МОЩНОСТЬ · W</div>
+          <div class="gs" id="pLimit">—</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card wide">
+      <h2>ДАТЧИКИ · ЗАГРУЗКА / ТЕМПЕРАТУРА
+        <span class="src" id="src" style="float:right"></span></h2>
+      <div class="bars" id="sensors"></div>
+    </section>
+
+    <section class="card wide">
+      <h2>СКОРОСТЬ ОБА · ДЕКОД ↑ВЫХОД И PREFILL ↓ВХОД</h2>
+      <div class="speed">
+        <div>
+          <div class="big" id="decode" style="color:var(--cyan)">—</div>
+          <div class="unit">ДЕКОД · ток/с ↑</div>
+        </div>
+        <div>
+          <div class="big" id="prefill" style="color:var(--green)">—</div>
+          <div class="unit">PREFILL · ток/с ↓</div>
+        </div>
+        <div style="margin-left:auto" class="muted" id="mean"></div>
+      </div>
+      <svg class="chart" viewBox="0 0 600 110" preserveAspectRatio="none">
+        <g id="grid"></g>
+        <g id="bars"></g>
+        <polyline id="spark" fill="none" stroke="#22d3ee" stroke-width="1.6" points=""/>
+      </svg>
+      <div class="chips">
+        <span class="chip" id="chipStrata">Strata · —</span>
+        <span class="chip" id="chipComfy">ComfyUI · —</span>
+        <span class="chip cyan" id="chipReq">запросов: —</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="k">КОНТЕКСТ</div><div class="v" id="ctx">—</div></div>
+        <div class="metric"><div class="k">ФАЗА</div><div class="v" id="phase">—</div></div>
+        <div class="metric"><div class="k">ВЫВОЕНО · ТЕКУЩИЙ ЗАПРОС</div><div class="v" id="gen">—</div></div>
+        <div class="metric"><div class="k">ОЧЕРЕДЬ</div><div class="v" id="queue">—</div></div>
+        <div class="metric"><div class="k">КЭШ · ДЕНЬ</div><div class="v" id="cacheToday">—</div></div>
+      </div>
+    </section>
+
+    <section class="card wide">
+      <h2>СЧЁТЧИКИ ТОКЕНОВ · ОКРУГЛЕНЫ ДО МИЛЛИОНОВ</h2>
+      <div class="tokens">
+        <div class="tgroup">
+          <div class="k">СЕГОДНЯ</div>
+          <div class="trow"><span class="lbl">↓ ВХОД · PROMPT</span>
+            <span class="num" id="todayIn" style="color:var(--cyan)">—</span></div>
+          <div class="trow"><span class="lbl">↑ ВЫХОД · OUTPUT</span>
+            <span class="num" id="todayOut" style="color:var(--pink)">—</span></div>
+          <div class="muted" id="todaySub">—</div>
+        </div>
+        <div class="tgroup">
+          <div class="k">ЗА ВСЁ ВРЕМЯ</div>
+          <div class="trow"><span class="lbl">↓ ВХОД · PROMPT</span>
+            <span class="num" id="allIn" style="color:var(--cyan)">—</span></div>
+          <div class="trow"><span class="lbl">↑ ВЫХОД · OUTPUT</span>
+            <span class="num" id="allOut" style="color:var(--pink)">—</span></div>
+          <div class="muted" id="allSub">—</div>
+        </div>
+      </div>
+      <div class="muted" id="exact" style="margin-top:10px"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+let server = params.get("server") || "";
+let token = params.get("token") || localStorage.getItem("monitor.token") || "";
+if (token) localStorage.setItem("monitor.token", token);
+if (!server && location.protocol === "file:") {
+  server = "http://127.0.0.1:8787";
+  $("server").style.display = ""; $("token").style.display = "";
+  $("connect").style.display = "";
+  $("server").value = localStorage.getItem("monitor.server") || server;
+  $("token").value = token;
+  server = $("server").value;
+}
+$("connect")?.addEventListener("click", () => {
+  server = $("server").value.trim().replace(/\/$/, "");
+  token = $("token").value.trim();
+  localStorage.setItem("monitor.server", server);
+  localStorage.setItem("monitor.token", token);
+});
+
+const CIRC = 2 * Math.PI * 52;
+const HEAT = [[52, 211, 153], [251, 191, 36], [251, 113, 133]];
+let hist = [];
+
+function hex(r, g, b) {
+  return "#" + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, "0")).join("");
+}
+function heat(t) {
+  t = Math.max(0, Math.min(1, t));
+  const c = t < 0.55
+    ? HEAT[0].map((v, i) => v + (HEAT[1][i] - v) * (t / 0.55))
+    : HEAT[1].map((v, i) => v + (HEAT[2][i] - v) * ((t - 0.55) / 0.45));
+  return hex(...c);
+}
+function setRing(arc, glow, pct) {
+  const off = CIRC * (1 - Math.max(0, Math.min(100, pct)) / 100);
+  if (arc) arc.style.strokeDashoffset = off;
+  if (glow) glow.style.strokeDashoffset = off;
+}
+function big(v) {
+  v = Number(v) || 0;
+  if (v >= 1e9) return (v / 1e9).toFixed(2) + "B";
+  if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
+  return Math.round(v).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
+}
+function human(v) {
+  v = Number(v) || 0;
+  if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
+  if (v >= 1e3) return (v / 1e3).toFixed(1) + "K";
+  return String(Math.round(v));
+}
+
+const ROWS = [
+  {key: "gpu", name: "ВИДЕОКАРТА", color: "var(--cyan)", lo: 25, hi: 90},
+  {key: "vram", name: "ВИДЕОПАМЯТЬ", color: "var(--pink)", lo: 25, hi: 95},
+  {key: "cpu", name: "ПРОЦЕССОР", color: "var(--green)", lo: 30, hi: 95},
+  {key: "ram", name: "ОПЕРАТИВКА", color: "var(--amber)", lo: 30, hi: 95},
+];
+function buildSensors() {
+  $("sensors").innerHTML = ROWS.map(r => `
+    <div class="srow">
+      <div class="sname">${r.name}</div>
+      <div class="track"><div class="fill" id="load_${r.key}"
+           style="width:0%;background:${r.color}"></div></div>
+      <div class="sval" id="loadtxt_${r.key}">—</div>
+      <div class="track heat"><div class="fill" id="temp_${r.key}"
+           style="width:0%"></div></div>
+      <div class="stemp" id="temptxt_${r.key}">—</div>
+    </div>`).join("");
+  $("sensors").querySelectorAll(".srow").forEach(row => {
+    const tracks = row.querySelectorAll(".track");
+    if (tracks.length === 2) row.style.gridTemplateColumns = "132px 1fr 88px 1fr 74px";
+  });
+}
+buildSensors();
+
+function drawChart() {
+  const w = 600, h = 110, base = h - 14, d = hist.slice(-48);
+  const bars = $("bars"), grid = $("grid");
+  bars.innerHTML = ""; grid.innerHTML = "";
+  for (let k = 1; k < 4; k++) {
+    const x = (w * k / 4).toFixed(1);
+    grid.innerHTML += `<line x1="${x}" y1="8" x2="${x}" y2="${base}"
+      stroke="#131c2c" stroke-width="1"/>`;
+  }
+  grid.innerHTML += `<line x1="0" y1="${base}" x2="${w}" y2="${base}"
+    stroke="#1b2942" stroke-width="1"/>`;
+  if (!d.length) return;
+  const peak = Math.max(...d);
+  if (peak <= 0.5) {
+    grid.innerHTML += `<text x="${w / 2}" y="${h / 2}" fill="#6b7a96" font-size="13"
+      text-anchor="middle" font-family="monospace">ДВИЖОК ПРОСТОИВАЕТ · 0 ТОК/С</text>`;
+    $("spark").setAttribute("points", "");
+    return;
+  }
+  const slot = w / 48;
+  const pts = [];
+  d.forEach((v, i) => {
+    const x = i * slot, hh = (v / peak) * (base - 10);
+    const col = heat(v / peak);
+    if (hh >= 1) {
+      bars.innerHTML += `<rect x="${x.toFixed(1)}" y="${(base - hh).toFixed(1)}"
+        width="${(slot - 1.6).toFixed(1)}" height="${hh.toFixed(1)}"
+        fill="${col}" opacity="0.35"/>`;
+      bars.innerHTML += `<rect x="${x.toFixed(1)}" y="${(base - hh).toFixed(1)}"
+        width="${(slot - 1.6).toFixed(1)}" height="2" fill="${col}"/>`;
+    }
+    pts.push((x + slot / 2).toFixed(1) + "," + (base - hh).toFixed(1));
+  });
+  $("spark").setAttribute("points", pts.join(" "));
+  grid.innerHTML += `<text x="4" y="14" fill="#8fd8ea" font-size="12"
+    font-family="monospace">пик ${peak.toFixed(1)} ток/с</text>
+    <text x="${w - 4}" y="${h - 3}" fill="#6b7a96" font-size="11"
+    text-anchor="end" font-family="monospace">сейчас</text>`;
+}
+
+async function tick() {
+  try {
+    const t0 = performance.now();
+    const r = await fetch(server + "/api/stats", {
+      cache: "no-store",
+      headers: token ? {"X-Token": token} : {}
+    });
+    if (r.status === 401) throw new Error("401 unauthorized");
+    const d = await r.json();
+    const lat = Math.round(performance.now() - t0);
+    const cpu = d.cpu || {}, gpu = d.gpu || {}, st = d.strata || {}, cf = d.comfyui || {};
+    const t = d.temps || {}, tkn = d.tokens || {}, today = tkn.today || {}, all = tkn.all_time || {};
+
+    $("dot").style.background = "var(--cyan)";
+    $("host").textContent = (d.agent?.hostname || "server") + " · онлайн";
+    $("lat").textContent = lat + " мс";
+
+    // gauges
+    const util = Number(gpu.util || 0), cpup = Number(cpu.percent || 0);
+    const pw = Number(gpu.power_w || 0), plim = Number(gpu.power_limit_w || 0);
+    setRing($("gArc"), $("gGlow"), util);
+    setRing($("cArc"), $("cGlow"), cpup);
+    setRing($("pArc"), $("pGlow"), plim ? 100 * pw / plim : 0);
+    $("gPct").textContent = Math.round(util) + "%";
+    $("cPct").textContent = Math.round(cpup) + "%";
+    $("pVal").textContent = pw ? Math.round(pw) : "—";
+    $("pLimit").textContent = plim ? "из " + Math.round(plim) + " W" : "мощность · W";
+    $("gName").textContent = gpu.name || "GPU";
+    $("cName").textContent = (cpu.cores || "—") + " ядер / " + (cpu.threads || "—") + " потоков";
+
+    // sensors, sorted GPU -> VRAM -> CPU -> RAM
+    const vals = {
+      gpu: {load: util, txt: Math.round(util) + "%", temp: t.gpu, hi: 90, lo: 25},
+      vram: {load: gpu.mem_total_gib ? 100 * gpu.mem_used_gib / gpu.mem_total_gib : 0,
+             txt: gpu.mem_total_gib ? gpu.mem_used_gib.toFixed(1) + "/" +
+                  Math.round(gpu.mem_total_gib) + "G" : "—",
+             temp: t.gpu_mem, hi: 95, lo: 25},
+      cpu: {load: cpup, txt: Math.round(cpup) + "%", temp: t.cpu,
+            hi: Number(t.cpu_limit || 95), lo: 30},
+      ram: {load: cpu.ram_total_gib ? 100 * cpu.ram_used_gib / cpu.ram_total_gib : 0,
+            txt: cpu.ram_total_gib ? cpu.ram_used_gib.toFixed(1) + "/" +
+                 Math.round(cpu.ram_total_gib) + "G" : "—",
+            temp: null, hi: 95, lo: 30},
+    };
+    ROWS.forEach(r => {
+      const v = vals[r.key];
+      const bar = $("load_" + r.key);
+      bar.style.width = Math.max(0, Math.min(100, v.load)).toFixed(1) + "%";
+      bar.style.background = v.load > 92 ? "var(--red)" : r.color;
+      $("loadtxt_" + r.key).textContent = v.txt;
+      const tt = $("temp_" + r.key), tv = $("temptxt_" + r.key);
+      if (v.temp == null) {
+        tt.style.width = "0%"; tv.textContent = "нет датчика"; tv.style.color = "var(--dim)";
+      } else {
+        const frac = Math.max(0, Math.min(1, (v.temp - v.lo) / (v.hi - v.lo)));
+        tt.style.width = (frac * 100).toFixed(1) + "%";
+        tv.textContent = Math.round(v.temp) + "°C";
+        tv.style.color = heat(frac);
+      }
+    });
+    const src = [t.cpu_source, gpu.name ? "nvidia-smi" : null].filter(Boolean).join(" · ");
+    $("src").textContent = src || "нет датчиков";
+
+    // both kinds of token speed
+    const liveDecode = Number(st.tok_s || 0);
+    const livePrefill = Number(st.prefill_tok_s_mean || 0);
+    const avgDecode = Number(st.decode_tok_s_avg || st.tok_s_mean || 0);
+    const avgPrefill = Number(st.prefill_tok_s_avg || 0);
+    $("decode").textContent = (liveDecode || avgDecode || 0).toFixed(1);
+    $("prefill").textContent = Math.round(livePrefill || avgPrefill || 0).toLocaleString("ru-RU")
+      .replace(/\u00a0/g, " ");
+    $("mean").textContent = liveDecode > 0
+      ? "живые значения · среднее за прогон ↑" + avgDecode.toFixed(1) +
+        " ↓" + Math.round(avgPrefill)
+      : "среднее за прогон";
+
+    hist.push(liveDecode); if (hist.length > 48) hist.shift();
+    drawChart();
+
+    // token counters, rounded to millions
+    $("todayIn").textContent = big(today.prompt);
+    $("todayOut").textContent = big(today.output);
+    $("allIn").textContent = big(all.prompt);
+    $("allOut").textContent = big(all.output);
+    $("todaySub").textContent = (today.requests || 0) + " запросов · кэш " + human(today.reused);
+    $("allSub").textContent = (all.requests || 0) + " запросов · кэш " + human(all.reused);
+    $("exact").textContent = "точные значения · сегодня " +
+      (today.total || 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ") +
+      " · всего " + (all.total || 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ") + " токенов";
+
+    const cs = $("chipStrata");
+    cs.textContent = st.up ? "Strata · " + (st.phase || st.state || "idle") : "Strata · off";
+    cs.className = "chip " + (st.up ? (st.state === "generating" ? "on" : "cyan") : "");
+    const cc = $("chipComfy");
+    cc.textContent = cf.up ? "ComfyUI · " + (cf.running || 0) + "▶ " + (cf.pending || 0) + "…"
+                           : "ComfyUI · off";
+    cc.className = "chip " + (cf.up ? "pink" : "");
+    $("chipReq").textContent = "запросов: " + (all.requests ?? st.total_requests ?? "—");
+    $("ctx").textContent = st.context ? Math.round(st.context / 1024) + "K" : "—";
+    $("phase").textContent = st.phase || st.state || "—";
+    $("gen").textContent = st.generated != null
+      ? st.generated + (st.max_tokens ? " / " + st.max_tokens : "") : "—";
+    $("queue").textContent = (st.queued ?? 0) + (cf.pending ? " + " + cf.pending : "");
+    $("cacheToday").textContent = human(today.reused);
+  } catch (e) {
+    $("dot").style.background = "var(--red)";
+    if (String(e).includes("401")) {
+      $("host").textContent = "нужен токен API";
+      $("token").style.display = "";
+    } else {
+      $("host").textContent = "нет связи";
+    }
+  }
+  setTimeout(tick, 1000);
+}
+tick();
+</script>
+</body>
+</html>

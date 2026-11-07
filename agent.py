@@ -21,6 +21,7 @@ import argparse
 import glob
 import hmac
 import json
+import math
 import os
 import platform
 import shutil
@@ -1054,6 +1055,81 @@ class Sampler(threading.Thread):
         }
 
 
+class DemoSampler(Sampler):
+    """Synthetic data in the same shape as the real one: --demo / TP_DEMO=1.
+    Lets you look at the clients without a GPU, Strata or ComfyUI."""
+
+    def __init__(self, interval=1.0):
+        super().__init__("", "", interval)
+        import random
+        self.rnd = random.Random(7)
+        self.t0 = time.time()
+        self.hist = []
+        self.recent = []
+        self.today = {"prompt": 41250000, "output": 312116, "reused": 40610000, "requests": 343}
+        self.all = {"prompt": 56660000, "output": 438901, "reused": 55690000, "requests": 466}
+        self.req = None
+
+    def _collect(self):
+        r, now = self.rnd, time.time()
+        if self.req is None and r.random() < 0.18:
+            self.req = {"id": "demo-%d" % int(now), "phase": "reading", "read": 0,
+                        "total": r.choice([1200, 4400, 34000, 138000]), "gen": 0,
+                        "max": r.choice([256, 512, 1024]), "start": now}
+        state, tok, pre = "idle", 0.0, 0.0
+        q = self.req
+        if q:
+            if q["phase"] == "reading":
+                pre = 600 + r.random() * 90
+                q["read"] = min(q["total"], q["read"] + int(pre * self.interval))
+                state = "reading"
+                if q["read"] >= q["total"]:
+                    q["phase"] = "generating"
+            else:
+                tok = 55 + 10 * math.sin(now / 3) + r.random() * 6
+                q["gen"] = min(q["max"], q["gen"] + int(tok * self.interval))
+                state = "generating"
+                if q["gen"] >= q["max"]:
+                    self.recent.insert(0, {"id": q["id"], "t": now, "tok_s": round(tok, 1),
+                                           "prefill_tok_s": round(640 + r.random() * 40, 1),
+                                           "out": q["gen"], "prompt": q["total"], "prompt_read": q["total"],
+                                           "reused": 0, "finish": "stop", "duration_s": round(now - q["start"], 1)})
+                    del self.recent[24:]
+                    for b in (self.today, self.all):
+                        b["prompt"] += q["total"]; b["output"] += q["gen"]; b["requests"] += 1
+                    self.req = None
+        self.hist.append(round(tok, 2)); del self.hist[:-60]
+        busy = state != "idle"
+        util = (92 + r.random() * 7) if busy else (3 + r.random() * 4)
+        cpu = (38 + r.random() * 20) if state == "reading" else (12 + r.random() * 8 if busy else 2 + r.random() * 3)
+        gtemp = 48 + (24 if busy else 0) + r.random() * 3
+        last = self.recent[0] if self.recent else {}
+
+        def block(b):
+            return dict(b, total=b["prompt"] + b["output"])
+        gpu = {"name": "NVIDIA GeForce RTX 3060", "util": round(util, 1), "mem_used_mib": 11160.0,
+               "mem_total_mib": 12288.0, "mem_used_gib": 10.9, "mem_total_gib": 12.0, "temp": round(gtemp, 1),
+               "power_w": round((150 + r.random() * 18) if busy else 18 + r.random() * 4, 1),
+               "power_limit_w": 170.0, "fan_percent": 64.0 if busy else 30.0, "count": 1}
+        cpu_d = {"percent": round(cpu, 1), "name": "AMD Ryzen 7 5700G", "cores": 8, "threads": 16,
+                 "temp_c": round(44 + cpu / 4 + r.random() * 2, 1), "ram_percent": 61.0,
+                 "ram_used_gib": 38.9, "ram_total_gib": 64.0, "uptime_s": int(now - self.t0) + 86400 * 3}
+        strata = {"up": True, "model": "Qwen3.8-Flash-Next IQ3_XXS", "context": 262144, "version": "0.1.57",
+                  "state": state, "tok_s": round(tok, 2), "tok_s_mean": round(tok, 2),
+                  "prefill_tok_s_mean": round(pre, 2), "decode_tok_s_last": last.get("tok_s"),
+                  "prefill_tok_s_last": last.get("prefill_tok_s"), "decode_tok_s_avg": 61.0,
+                  "prefill_tok_s_avg": 619.0, "generated": q and q["gen"], "max_tokens": q and q["max"],
+                  "prompt_tokens": q and q["total"], "prompt_read": q and q["read"],
+                  "prompt_total": q and q["total"], "queued": 0, "recent": self.recent[:12],
+                  "history": {"tok_s": list(self.hist)}}
+        comfy = {"up": True, "version": "0.3.66", "device": "cuda:0 RTX 3060", "vram_total_gib": 12.0,
+                 "vram_free_gib": 1.1, "running": 1 if r.random() < 0.3 else 0, "pending": r.choice([0, 0, 1, 2])}
+        return {"cpu": cpu_d, "gpu": gpu,
+                "temps": {"cpu": cpu_d["temp_c"], "gpu": gpu["temp"], "gpu_mem": None},
+                "strata": strata, "comfyui": comfy,
+                "tokens": {"today": block(self.today), "all_time": block(self.all)}}
+
+
 # --------------------------------------------------------------------------- #
 # HTTP
 # --------------------------------------------------------------------------- #
@@ -1179,9 +1255,11 @@ def main():
     ap.add_argument("--interval", type=float, default=float(os.environ.get("MONITOR_INTERVAL", "1.0")))
     ap.add_argument("--token", default=os.environ.get("TP_TOKEN", ""),
                     help="optional API token; empty keeps the API open")
+    ap.add_argument("--demo", action="store_true", default=os.environ.get("TP_DEMO") == "1",
+                    help="synthetic data, no GPU / Strata / ComfyUI needed")
     args = ap.parse_args()
 
-    sampler = Sampler(args.strata, args.comfy, args.interval)
+    sampler = DemoSampler(args.interval) if args.demo else Sampler(args.strata, args.comfy, args.interval)
     Handler.sampler = sampler
     Handler.token = (args.token or "").strip()
     sampler.start()
@@ -1193,6 +1271,7 @@ def main():
     print("  strata : %s" % args.strata)
     print("  comfy  : %s" % args.comfy)
     print("  local  : http://127.0.0.1:%d" % args.port)
+    print("  demo   : %s" % ("on" if args.demo else "off"))
     print("  auth   : %s" % ("token required" if Handler.token else "open (no token)"))
     try:
         srv.serve_forever()

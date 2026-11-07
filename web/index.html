@@ -3,454 +3,700 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TokenPulse — монитор Strata и ComfyUI</title>
+<meta name="theme-color" content="#0a0a0b">
+<title>TokenPulse</title>
+<link rel="icon" id="favicon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-  :root{
-    --bg:#070b14; --panel:#0c1424; --panel2:#111c31; --track:#1b2942;
-    --stroke:#20304d; --text:#e8eefc; --dim:#6b7a96;
-    --cyan:#22d3ee; --green:#34d399; --pink:#f472b6; --amber:#fbbf24;
-    --violet:#a78bfa; --red:#fb7185;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;min-height:100%}
-  body{
-    background:
-      radial-gradient(900px 500px at 15% -10%, rgba(34,211,238,.16), transparent 60%),
-      radial-gradient(700px 500px at 110% 15%, rgba(244,114,182,.13), transparent 60%),
-      radial-gradient(800px 600px at 50% 120%, rgba(52,211,153,.10), transparent 60%),
-      var(--bg);
-    color:var(--text); font:14px/1.45 "Segoe UI",system-ui,sans-serif;
-    padding:26px 18px 40px;
-  }
-  body::before{
-    content:""; position:fixed; inset:0; pointer-events:none; opacity:.25;
-    background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
-                     linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
-    background-size:46px 46px;
-    mask-image:radial-gradient(circle at 50% 30%,#000 0%,transparent 75%);
-  }
-  .wrap{max-width:820px;margin:0 auto;position:relative}
-  header{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
-  .dot{width:10px;height:10px;border-radius:50%;background:var(--cyan);
-       box-shadow:0 0 0 0 rgba(34,211,238,.7);animation:pulse 1.8s infinite}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,211,238,.55)}
-                   70%{box-shadow:0 0 0 12px rgba(34,211,238,0)}
-                   100%{box-shadow:0 0 0 0 rgba(34,211,238,0)}}
-  h1{font-size:16px;letter-spacing:.22em;margin:0;font-weight:700}
-  .muted{color:var(--dim);font-size:12px}
-  .spacer{flex:1}
-  input{background:var(--panel2);border:1px solid var(--stroke);color:var(--text);
-        border-radius:9px;padding:6px 9px;font:12px "DejaVu Sans Mono",monospace;width:210px}
-  button{background:rgba(34,211,238,.15);border:1px solid rgba(34,211,238,.4);
-         color:var(--cyan);border-radius:9px;padding:6px 11px;cursor:pointer;font-weight:700}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .card{background:linear-gradient(160deg,rgba(255,255,255,.04),rgba(255,255,255,.01));
-        border:1px solid var(--stroke);border-radius:18px;padding:16px;
-        backdrop-filter:blur(14px);box-shadow:0 18px 50px rgba(0,0,0,.35);
-        animation:rise .6s ease both}
-  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-  .card h2{font-size:11px;letter-spacing:.16em;color:var(--dim);margin:0 0 12px;font-weight:700}
-  .gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-  @media(max-width:700px){.gauges{grid-template-columns:1fr}}
-  .gauge{display:flex;flex-direction:column;align-items:center;gap:8px}
-  svg.ring{width:124px;height:124px;transform:rotate(-90deg)}
-  svg.ring circle{fill:none;stroke-width:9;stroke-linecap:round}
-  svg.ring .tr{stroke:var(--track)}
-  svg.ring .gl{stroke-width:15;opacity:.22}
-  svg.ring .val{transition:stroke-dashoffset .45s ease}
-  .gv{font:700 20px "DejaVu Sans Mono",monospace}
-  .gs{font-size:10px;color:var(--dim);letter-spacing:.1em}
-  .bars{display:grid;gap:12px}
-  .srow{display:grid;grid-template-columns:132px 1fr 88px 74px;gap:10px;align-items:center}
-  @media(max-width:700px){.srow{grid-template-columns:110px 1fr 72px 64px}}
-  .sname{font-size:11px;letter-spacing:.08em;color:var(--dim);font-weight:700}
-  .track{height:10px;background:var(--track);border-radius:99px;overflow:hidden;position:relative}
-  .fill{height:100%;border-radius:99px;transition:width .45s ease,background .45s ease;
-        position:relative}
-  .fill::after{content:"";position:absolute;inset:0;
-    background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);
-    transform:translateX(-100%);animation:shimmer 2.6s infinite}
-  @keyframes shimmer{to{transform:translateX(100%)}}
-  .heat{background-image:linear-gradient(90deg,#34d399 0%,#fbbf24 55%,#fb7185 100%)}
-  .heat .fill{background:rgba(7,11,20,.78)}
-  .sval{font:600 12px "DejaVu Sans Mono",monospace;text-align:right}
-  .stemp{font:700 13px "DejaVu Sans Mono",monospace;text-align:right}
-  .speed{display:flex;align-items:baseline;gap:26px;flex-wrap:wrap}
-  .speed .big{font:700 34px "DejaVu Sans Mono",monospace;line-height:1}
-  .unit{color:var(--dim);font-size:12px}
-  .chart{margin-top:12px;width:100%;height:110px;display:block}
-  .tokens{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  @media(max-width:700px){.tokens{grid-template-columns:1fr}}
-  .tgroup .k{font-size:10px;letter-spacing:.16em;color:var(--dim)}
-  .trow{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px}
-  .trow .lbl{font-size:11px;color:var(--dim);letter-spacing:.08em}
-  .trow .num{font:700 21px "DejaVu Sans Mono",monospace}
-  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-  .chip{font-size:11px;font-weight:700;letter-spacing:.05em;padding:4px 9px;border-radius:99px;
-        background:var(--panel2);border:1px solid var(--stroke);color:var(--dim)}
-  .chip.on{color:var(--green);border-color:rgba(52,211,153,.35)}
-  .chip.pink{color:var(--pink);border-color:rgba(244,114,182,.3)}
-  .chip.cyan{color:var(--cyan);border-color:rgba(34,211,238,.3)}
-  .metrics{display:flex;gap:22px;flex-wrap:wrap;margin-top:14px}
-  .metric .k{font-size:10px;color:var(--dim);letter-spacing:.12em}
-  .metric .v{font:600 15px "DejaVu Sans Mono",monospace;margin-top:2px}
-  .src{font-size:11px;color:var(--dim);font-family:"DejaVu Sans Mono",monospace}
-  .wide{grid-column:1/-1}
-  @media(max-width:620px){.grid{grid-template-columns:1fr}}
+:root{
+  --bg:#0a0a0b; --bg2:#111113; --line:#1d1d20; --line2:#2a2a2e;
+  --paper:#ece9e2; --dim:#7a766f; --faint:#45423e;
+  --out:#c6f432;  /* выходные токены, декод */
+  --in:#7fd4ff;   /* входные токены, чтение промпта */
+  --warm:#ffb020; --hot:#ff4d1a;
+  --num:"Barlow Condensed","Bahnschrift","DIN Alternate","Roboto Condensed","Arial Narrow",sans-serif;
+  --mono:"JetBrains Mono","Cascadia Mono",Consolas,"DejaVu Sans Mono",monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--paper);font:13px/1.35 var(--mono);overflow-x:hidden;
+     -webkit-font-smoothing:antialiased}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.lbl{font:500 10px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+.num{font-family:var(--num);font-stretch:condensed;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+
+/* ------------------------------------------------------------------ full */
+.app{max-width:1180px;margin:0 auto;padding:18px 18px 22px;display:grid;gap:18px;
+     grid-template-columns:1fr;grid-template-areas:"top" "hero" "meters" "tokens" "comfy" "recent" "foot"}
+@media (min-width:880px){
+  .app{grid-template-columns:1.25fr 1fr;column-gap:34px;
+       grid-template-areas:"top top" "hero hero" "meters tokens" "meters comfy" "meters recent" "foot foot"}
+}
+.top{grid-area:top;display:flex;align-items:center;gap:14px;min-width:0}
+.core{width:46px;height:46px;flex:none}
+.ident{min-width:0;flex:1}
+.state{font:600 30px/1 var(--num);font-stretch:condensed;letter-spacing:.04em;text-transform:uppercase;
+       white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .4s}
+.where{margin-top:5px;color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.where b{color:var(--paper);font-weight:500}
+.tools{display:flex;gap:4px;flex:none}
+.tool{width:34px;height:34px;border:1px solid var(--line2);border-radius:2px;display:grid;place-items:center;
+      color:var(--dim);transition:color .2s,border-color .2s,background .2s}
+.tool:hover{color:var(--paper);border-color:var(--dim)}
+.tool svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5}
+
+.hero{grid-area:hero;position:relative;height:210px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%}
+.readout{position:absolute;z-index:2;pointer-events:none}
+.readout.out{left:0;top:14px}
+.readout.in{left:0;bottom:12px}
+.readout .big{font:600 92px/.86 var(--num);font-stretch:condensed;font-variant-numeric:tabular-nums;
+              color:var(--out);text-shadow:0 0 30px rgba(198,244,50,.18);transition:color .4s,opacity .4s}
+.readout.in .big{font-size:38px;color:var(--in);text-shadow:none}
+.readout .row{display:flex;align-items:baseline;gap:10px}
+.readout .unit{font:500 11px var(--mono);color:var(--dim);letter-spacing:.12em;text-transform:uppercase}
+.readout.idle .big{opacity:.38}
+.scale{position:absolute;right:0;z-index:2;font:10px var(--mono);color:var(--dim);background:var(--bg);padding:1px 0 1px 6px}
+.scale.t{top:8px}.scale.b{bottom:8px}
+
+.job{grid-area:hero;align-self:end;margin-bottom:-12px;height:2px;background:transparent;position:relative;z-index:3}
+.job i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--in);transition:width .9s linear,background .3s}
+
+/* meters */
+.meters{grid-area:meters;display:grid;gap:4px;align-content:start}
+.m{display:grid;grid-template-columns:62px 1fr 74px 46px;align-items:center;gap:12px;padding:9px 0;
+   border-bottom:1px solid var(--line)}
+.m .mlbl{display:flex;flex-direction:column;gap:5px}
+.m .mlbl small{font-size:10px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62px}
+.m canvas{width:100%;height:34px;display:block}
+.m .mval{text-align:right;font:600 34px/1 var(--num);font-stretch:condensed;font-variant-numeric:tabular-nums}
+.m .mval small{font:500 11px var(--mono);color:var(--dim);margin-left:2px}
+.m .mtemp{text-align:right;font:500 20px/1 var(--num);font-stretch:condensed;color:var(--dim);transition:color .6s}
+.m .mtemp:empty::before{content:"—";color:var(--faint)}
+.m.off{opacity:.35}
+
+/* tokens */
+.tokens{grid-area:tokens;display:grid;gap:12px;align-content:start}
+.odo{display:flex;font:600 64px/1 var(--num);font-stretch:condensed;height:1em;overflow:hidden;
+     font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.odo .d{display:inline-block;height:1em;overflow:hidden;width:.5em;text-align:center}
+.odo .d span{display:block;transition:transform 1.1s cubic-bezier(.2,.8,.15,1)}
+.odo .d span i{display:block;height:1em;font-style:normal}
+.odo .sep{width:.22em}
+.odo .unit{font-size:.34em;align-self:flex-end;margin:0 0 .18em .25em;color:var(--dim);font-family:var(--mono);font-weight:500}
+.split{display:flex;height:6px;gap:2px}
+.split i{display:block;height:100%;transition:flex-grow 1s}
+.split .si{background:var(--in)}.split .so{background:var(--out)}
+.splitlbl{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
+.splitlbl b{font-weight:500}
+.splitlbl .ci{color:var(--in)}.splitlbl .co{color:var(--out)}
+.allrow{display:flex;justify-content:space-between;align-items:baseline;padding-top:10px;border-top:1px solid var(--line)}
+.allrow .num{font-size:30px;font-weight:600}
+.allrow .lbl{line-height:1.6}
+
+/* comfy */
+.comfy{grid-area:comfy;border-top:1px solid var(--line);padding-top:12px;display:grid;gap:10px}
+.comfy[hidden]{display:none}
+.qrow{display:flex;align-items:center;gap:14px}
+.dots{display:flex;gap:5px}
+.dots i{width:10px;height:10px;border:1px solid var(--line2);transform:rotate(45deg)}
+.dots i.run{background:var(--out);border-color:var(--out);animation:blink 1s infinite}
+.dots i.wait{border-color:var(--paper)}
+@keyframes blink{50%{opacity:.35}}
+.qrow .num{font-size:28px;font-weight:600}
+
+/* recent */
+.recent{grid-area:recent;border-top:1px solid var(--line);padding-top:12px}
+.rlist{margin-top:10px;display:grid;gap:7px}
+.r{display:grid;grid-template-columns:52px 1fr 64px 60px;gap:10px;align-items:center;font-size:11px;color:var(--dim)}
+.r .bar{height:8px;display:flex;gap:1px}
+.r .bar i{display:block;height:100%}
+.r .bar .bi{background:var(--in);opacity:.55}.r .bar .bo{background:var(--out)}
+.r b{color:var(--paper);font-weight:500;text-align:right}
+.r .sp{color:var(--out);text-align:right}
+.empty{color:var(--faint);font-size:11px;margin-top:10px}
+
+.foot{grid-area:foot;display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--faint);font-size:10px;letter-spacing:.06em;
+      padding-top:10px;border-top:1px solid var(--line)}
+.foot b{color:var(--dim);font-weight:400}
+.foot .grow{flex:1}
+
+/* ------------------------------------------------------------------ mini */
+.mini{display:none}
+body.is-mini .app{display:none}
+body.is-mini .mini, .mini.in-pip{display:grid}
+body.is-mini{overflow:hidden}
+.mini{position:relative;height:100vh;min-height:84px;grid-template-columns:auto auto 1fr;align-items:center;gap:12px;
+      padding:0 12px 0 10px;overflow:hidden;background:var(--bg);user-select:none}
+.mini canvas.mwave{position:absolute;inset:0;width:100%;height:100%;opacity:.5;pointer-events:none}
+.mini > *:not(.mwave){position:relative;z-index:1}
+.mini .mcore{width:34px;height:34px}
+.mini .mnum{display:flex;flex-direction:column;gap:3px;min-width:0}
+.mini .mnum .big{font:600 44px/.85 var(--num);font-stretch:condensed;color:var(--out);font-variant-numeric:tabular-nums}
+.mini .mnum .big.idle{opacity:.4}
+.mini .mnum .lbl{font-size:9px;white-space:nowrap}
+.mini .mstats{display:grid;gap:4px;justify-self:end;min-width:120px;max-width:170px;width:100%}
+.ms{display:grid;grid-template-columns:30px 1fr 34px;align-items:center;gap:6px;font-size:9px;color:var(--dim);letter-spacing:.1em}
+.ms .t{height:4px;background:var(--line2);position:relative}
+.ms .t i{position:absolute;left:0;top:0;bottom:0;background:var(--paper);transition:width .6s}
+.ms b{font:600 14px/1 var(--num);font-stretch:condensed;color:var(--paper);text-align:right}
+.ms b.hot{color:var(--hot)} .ms b.warm{color:var(--warm)}
+.mini .mexp{position:absolute;right:4px;top:3px;z-index:2;width:18px;height:18px;color:var(--faint);display:grid;place-items:center}
+.mini .mexp:hover{color:var(--paper)}
+.mini .mexp svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.6}
+
+/* ---------------------------------------------------------------- drawer */
+.drawer{position:fixed;inset:0 0 0 auto;width:min(380px,100vw);background:var(--bg2);border-left:1px solid var(--line2);
+        z-index:40;transform:translateX(102%);transition:transform .35s cubic-bezier(.2,.8,.2,1);padding:20px 18px;
+        display:flex;flex-direction:column;gap:16px;overflow:auto}
+.drawer.open{transform:none}
+.drawer h3{font:600 26px/1 var(--num);font-stretch:condensed;text-transform:uppercase;letter-spacing:.04em}
+.srv{display:grid;grid-template-columns:10px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.srv .led{width:8px;height:8px;background:var(--faint)}
+.srv.on .led{background:var(--out);box-shadow:0 0 10px var(--out)}
+.srv .nm{font-size:13px}.srv .url{font-size:10px;color:var(--dim);word-break:break-all}
+.srv .act{display:flex;gap:4px}
+.btn{border:1px solid var(--line2);padding:6px 10px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.btn:hover{color:var(--paper);border-color:var(--dim)}
+.btn.pri{border-color:var(--out);color:var(--out)}
+.fld{display:grid;gap:5px}
+.fld input{background:var(--bg);border:1px solid var(--line2);color:var(--paper);font:12px var(--mono);padding:8px 9px;border-radius:0;outline:none}
+.fld input:focus{border-color:var(--dim)}
+.hint{font-size:11px;color:var(--dim);line-height:1.5}
+.hint kbd{border:1px solid var(--line2);padding:0 4px;font:10px var(--mono);color:var(--paper)}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:39;opacity:0;pointer-events:none;transition:opacity .3s}
+.scrim.open{opacity:1;pointer-events:auto}
+.err{color:var(--hot);font-size:11px}
+
+@media (max-width:420px){
+  .app{padding:14px 14px 18px;gap:14px}
+  .readout .big{font-size:74px}
+  .state{font-size:22px}
+  .tool{width:30px;height:30px}
+  .m{grid-template-columns:52px 1fr 62px 38px;gap:9px}
+  .m .mval{font-size:28px}
+  .odo{font-size:52px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <span class="dot" id="dot"></span>
-    <h1>TOKEN<span style="color:var(--cyan)">PULSE</span></h1>
-    <span class="muted" id="host">подключение…</span>
-    <span class="spacer"></span>
-    <input id="server" placeholder="http://IP:8787" style="display:none">
-    <input id="token" placeholder="API token" style="display:none">
-    <button id="connect" style="display:none">Подключить</button>
-    <span class="muted" id="lat"></span>
+
+<main class="app" id="app">
+  <header class="top">
+    <canvas class="core" id="core" width="92" height="92"></canvas>
+    <div class="ident">
+      <div class="state" id="state">Подключение</div>
+      <div class="where" id="where">—</div>
+    </div>
+    <div class="tools">
+      <button class="tool" id="pipBtn" title="Мини-окно поверх всех окон (P)"><svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11"/><rect x="8" y="8" width="5" height="4" fill="currentColor" stroke="none"/></svg></button>
+      <button class="tool" id="miniBtn" title="Компактный режим (M)"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button>
+      <button class="tool" id="srvBtn" title="Серверы (S)"><svg viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="4.5"/><rect x="2" y="9" width="12" height="4.5"/><path d="M4.5 4.75h1M4.5 11.25h1"/></svg></button>
+    </div>
   </header>
 
-  <div class="grid">
-    <section class="card wide">
-      <h2>ЗАГРУЗКА · КРУГОВЫЕ ДАТЧИКИ</h2>
-      <div class="gauges">
-        <div class="gauge">
-          <svg class="ring" viewBox="0 0 124 124">
-            <circle class="tr" cx="62" cy="62" r="52"/>
-            <circle class="gl" cx="62" cy="62" r="52" stroke="var(--cyan)"
-                    stroke-dasharray="326.7" stroke-dashoffset="326.7" id="gGlow"/>
-            <circle class="val" cx="62" cy="62" r="52" stroke="var(--cyan)"
-                    stroke-dasharray="326.7" stroke-dashoffset="326.7" id="gArc"/>
-          </svg>
-          <div class="gv" id="gPct">0%</div>
-          <div class="gs">ВИДЕОКАРТА</div>
-          <div class="gs" id="gName">GPU</div>
-        </div>
-        <div class="gauge">
-          <svg class="ring" viewBox="0 0 124 124">
-            <circle class="tr" cx="62" cy="62" r="52"/>
-            <circle class="gl" cx="62" cy="62" r="52" stroke="var(--green)"
-                    stroke-dasharray="326.7" stroke-dashoffset="326.7" id="cGlow"/>
-            <circle class="val" cx="62" cy="62" r="52" stroke="var(--green)"
-                    stroke-dasharray="326.7" stroke-dashoffset="326.7" id="cArc"/>
-          </svg>
-          <div class="gv" id="cPct">0%</div>
-          <div class="gs">ПРОЦЕССОР</div>
-          <div class="gs" id="cName">CPU</div>
-        </div>
-        <div class="gauge">
-          <svg class="ring" viewBox="0 0 124 124">
-            <circle class="tr" cx="62" cy="62" r="52"/>
-            <circle class="gl" cx="62" cy="62" r="52" stroke="var(--violet)"
-                    stroke-dasharray="326.7" stroke-dashoffset="326.7" id="pGlow"/>
-            <circle class="val" cx="62" cy="62" r="52" stroke="var(--violet)"
-                    stroke-dasharray="326.7" stroke-dashoffset="326.7" id="pArc"/>
-          </svg>
-          <div class="gv" id="pVal">0</div>
-          <div class="gs">МОЩНОСТЬ · W</div>
-          <div class="gs" id="pLimit">—</div>
-        </div>
-      </div>
-    </section>
+  <section class="hero" id="hero">
+    <canvas id="wave"></canvas>
+    <div class="readout out" id="roOut">
+      <div class="row"><div class="big" id="dec">—</div></div>
+      <div class="row" style="margin-top:8px"><span class="lbl" style="color:var(--out)">▲ вывод</span><span class="unit" id="decSub">ток/с</span></div>
+    </div>
+    <div class="readout in" id="roIn">
+      <div class="row"><div class="big" id="pre">—</div><span class="lbl" style="color:var(--in)">▼ чтение</span><span class="unit" id="preSub">ток/с</span></div>
+    </div>
+    <div class="scale t" id="scaleT"></div>
+    <div class="scale b" id="scaleB"></div>
+  </section>
+  <div class="job"><i id="job"></i></div>
 
-    <section class="card wide">
-      <h2>ДАТЧИКИ · ЗАГРУЗКА / ТЕМПЕРАТУРА
-        <span class="src" id="src" style="float:right"></span></h2>
-      <div class="bars" id="sensors"></div>
-    </section>
+  <section class="meters" id="meters"></section>
 
-    <section class="card wide">
-      <h2>СКОРОСТЬ ОБА · ДЕКОД ↑ВЫХОД И PREFILL ↓ВХОД</h2>
-      <div class="speed">
-        <div>
-          <div class="big" id="decode" style="color:var(--cyan)">—</div>
-          <div class="unit">ДЕКОД · ток/с ↑</div>
-        </div>
-        <div>
-          <div class="big" id="prefill" style="color:var(--green)">—</div>
-          <div class="unit">PREFILL · ток/с ↓</div>
-        </div>
-        <div style="margin-left:auto" class="muted" id="mean"></div>
-      </div>
-      <svg class="chart" viewBox="0 0 600 110" preserveAspectRatio="none">
-        <g id="grid"></g>
-        <g id="bars"></g>
-        <polyline id="spark" fill="none" stroke="#22d3ee" stroke-width="1.6" points=""/>
-      </svg>
-      <div class="chips">
-        <span class="chip" id="chipStrata">Strata · —</span>
-        <span class="chip" id="chipComfy">ComfyUI · —</span>
-        <span class="chip cyan" id="chipReq">запросов: —</span>
-      </div>
-      <div class="metrics">
-        <div class="metric"><div class="k">КОНТЕКСТ</div><div class="v" id="ctx">—</div></div>
-        <div class="metric"><div class="k">ФАЗА</div><div class="v" id="phase">—</div></div>
-        <div class="metric"><div class="k">ВЫВОЕНО · ТЕКУЩИЙ ЗАПРОС</div><div class="v" id="gen">—</div></div>
-        <div class="metric"><div class="k">ОЧЕРЕДЬ</div><div class="v" id="queue">—</div></div>
-        <div class="metric"><div class="k">КЭШ · ДЕНЬ</div><div class="v" id="cacheToday">—</div></div>
-      </div>
-    </section>
+  <section class="tokens">
+    <div class="lbl">Токенов сегодня</div>
+    <div class="odo" id="odo"></div>
+    <div class="split"><i class="si" id="spIn"></i><i class="so" id="spOut"></i></div>
+    <div class="splitlbl"><span>вход <b class="ci" id="tIn">—</b></span><span><b id="tReq">—</b> запросов</span><span>выход <b class="co" id="tOut">—</b></span></div>
+    <div class="allrow"><span class="lbl">За всё время</span><span class="num" id="tAll">—</span></div>
+  </section>
 
-    <section class="card wide">
-      <h2>СЧЁТЧИКИ ТОКЕНОВ · ОКРУГЛЕНЫ ДО МИЛЛИОНОВ</h2>
-      <div class="tokens">
-        <div class="tgroup">
-          <div class="k">СЕГОДНЯ</div>
-          <div class="trow"><span class="lbl">↓ ВХОД · PROMPT</span>
-            <span class="num" id="todayIn" style="color:var(--cyan)">—</span></div>
-          <div class="trow"><span class="lbl">↑ ВЫХОД · OUTPUT</span>
-            <span class="num" id="todayOut" style="color:var(--pink)">—</span></div>
-          <div class="muted" id="todaySub">—</div>
-        </div>
-        <div class="tgroup">
-          <div class="k">ЗА ВСЁ ВРЕМЯ</div>
-          <div class="trow"><span class="lbl">↓ ВХОД · PROMPT</span>
-            <span class="num" id="allIn" style="color:var(--cyan)">—</span></div>
-          <div class="trow"><span class="lbl">↑ ВЫХОД · OUTPUT</span>
-            <span class="num" id="allOut" style="color:var(--pink)">—</span></div>
-          <div class="muted" id="allSub">—</div>
-        </div>
-      </div>
-      <div class="muted" id="exact" style="margin-top:10px"></div>
-    </section>
+  <section class="comfy" id="comfy" hidden>
+    <div class="lbl">ComfyUI <span id="cVer" style="color:var(--faint)"></span></div>
+    <div class="qrow">
+      <span class="num" id="cRun">0</span><span class="lbl">в работе</span>
+      <div class="dots" id="cDots"></div>
+      <span style="flex:1"></span>
+      <span class="lbl">VRAM свободно</span><span class="num" id="cVram">—</span>
+    </div>
+  </section>
+
+  <section class="recent">
+    <div class="lbl">Последние запросы</div>
+    <div class="rlist" id="recent"></div>
+  </section>
+
+  <footer class="foot">
+    <span>TOKENPULSE</span>
+    <span>агент <b id="fAgent">—</b></span>
+    <span>отклик <b id="fPing">—</b></span>
+    <span>сервер работает <b id="fUp">—</b></span>
+    <span class="grow"></span>
+    <span><b>M</b> мини · <b>P</b> поверх окон · <b>S</b> серверы</span>
+  </footer>
+</main>
+
+<div class="mini" id="mini" title="Двойной клик: развернуть">
+  <canvas class="mwave" id="mwave"></canvas>
+  <canvas class="mcore" id="mcore" width="68" height="68"></canvas>
+  <div class="mnum"><div class="big num" id="mDec">—</div><div class="lbl" id="mState">—</div></div>
+  <div class="mstats">
+    <div class="ms"><span>GPU</span><span class="t"><i id="mGpuT"></i></span><b id="mGpu">—</b></div>
+    <div class="ms"><span>VRAM</span><span class="t"><i id="mVrT"></i></span><b id="mVr">—</b></div>
+    <div class="ms"><span>T°</span><span class="t"><i id="mTT"></i></span><b id="mT">—</b></div>
   </div>
+  <button class="mexp" id="mExp" title="Развернуть"><svg viewBox="0 0 12 12"><path d="M7 1.5h3.5V5M5 10.5H1.5V7M10.5 1.5 7 5M1.5 10.5 5 7"/></svg></button>
 </div>
 
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Серверы">
+  <h3>Серверы</h3>
+  <div id="srvList"></div>
+  <div class="fld"><span class="lbl">Название</span><input id="fName" placeholder="Сервер V100"></div>
+  <div class="fld"><span class="lbl">Адрес агента</span><input id="fUrl" placeholder="http://192.168.31.30:8787"></div>
+  <div class="fld"><span class="lbl">Токен (если задан TP_TOKEN)</span><input id="fTok" placeholder="необязательно"></div>
+  <div style="display:flex;gap:6px"><button class="btn pri" id="fAdd">Добавить и подключить</button><button class="btn" id="fClose">Закрыть</button></div>
+  <div class="err" id="fErr"></div>
+  <p class="hint">На сервере запустите <kbd>agent.py</kbd>. Адрес вида <kbd>http://IP:8787</kbd>.
+    Мини-окно поверх всех окон работает в Chrome и Edge (кнопка <kbd>▣</kbd> или клавиша <kbd>P</kbd>).
+    Если сузить окно, монитор сам переходит в компактный вид. Пока окно свёрнуто, скорость и загрузка видны в заголовке и на иконке.</p>
+</aside>
+
 <script>
+"use strict";
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-let server = params.get("server") || "";
-let token = params.get("token") || localStorage.getItem("monitor.token") || "";
-if (token) localStorage.setItem("monitor.token", token);
-if (!server && location.protocol === "file:") {
-  server = "http://127.0.0.1:8787";
-  $("server").style.display = ""; $("token").style.display = "";
-  $("connect").style.display = "";
-  $("server").value = localStorage.getItem("monitor.server") || server;
-  $("token").value = token;
-  server = $("server").value;
-}
-$("connect")?.addEventListener("click", () => {
-  server = $("server").value.trim().replace(/\/$/, "");
-  token = $("token").value.trim();
-  localStorage.setItem("monitor.server", server);
-  localStorage.setItem("monitor.token", token);
-});
+const N = 150;                        // секунд в ленте
+const C = {out:"#c6f432", in:"#7fd4ff", paper:"#ece9e2", dim:"#7a766f", faint:"#45423e", line:"#1d1d20",
+           line2:"#2a2a2e", warm:"#ffb020", hot:"#ff4d1a", bg:"#0a0a0b"};
 
-const CIRC = 2 * Math.PI * 52;
-const HEAT = [[52, 211, 153], [251, 191, 36], [251, 113, 133]];
-let hist = [];
+/* ----------------------------------------------------------- servers -- */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem("tp2."+k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem("tp2."+k, JSON.stringify(v)); }catch(e){} }
+};
+let servers = store.get("servers", []);
+const here = /^https?:$/.test(location.protocol) ? location.origin : null;
+if (here && !servers.some(s => s.url === here)) servers.unshift({name: "Этот сервер", url: here, token: ""});
+if (!servers.some(s => s.url === "demo")) servers.push({name: "Демо-данные", url: "demo", token: ""});
+if (params.get("server")) {
+  const u = params.get("server").replace(/\/+$/, "");
+  if (!servers.some(s => s.url === u)) servers.unshift({name: u.replace(/^https?:\/\//, ""), url: u, token: ""});
+  store.set("active", u);
+}
+if (params.get("token")) { const s = servers.find(s => s.url === (store.get("active") || here)); if (s) s.token = params.get("token"); }
+if (params.get("demo") != null) store.set("active", "demo");
+store.set("servers", servers);
+let active = store.get("active", null);
+if (!servers.some(s => s.url === active)) active = servers[0].url;
+const cur = () => servers.find(s => s.url === active) || servers[0];
 
-function hex(r, g, b) {
-  return "#" + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, "0")).join("");
-}
-function heat(t) {
-  t = Math.max(0, Math.min(1, t));
-  const c = t < 0.55
-    ? HEAT[0].map((v, i) => v + (HEAT[1][i] - v) * (t / 0.55))
-    : HEAT[1].map((v, i) => v + (HEAT[2][i] - v) * ((t - 0.55) / 0.45));
-  return hex(...c);
-}
-function setRing(arc, glow, pct) {
-  const off = CIRC * (1 - Math.max(0, Math.min(100, pct)) / 100);
-  if (arc) arc.style.strokeDashoffset = off;
-  if (glow) glow.style.strokeDashoffset = off;
-}
-function big(v) {
-  v = Number(v) || 0;
-  if (v >= 1e9) return (v / 1e9).toFixed(2) + "B";
-  if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
-  return Math.round(v).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
-}
-function human(v) {
-  v = Number(v) || 0;
-  if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
-  if (v >= 1e3) return (v / 1e3).toFixed(1) + "K";
-  return String(Math.round(v));
-}
+/* ------------------------------------------------------------- state -- */
+const hist = {dec: new Array(N).fill(0), pre: new Array(N).fill(0), gpu: new Array(N).fill(0), t: 0};
+let D = null, online = false, lastAt = 0, ping = null, failMsg = "Подключение", peak = {};
+let seeded = false;
 
-const ROWS = [
-  {key: "gpu", name: "ВИДЕОКАРТА", color: "var(--cyan)", lo: 25, hi: 90},
-  {key: "vram", name: "ВИДЕОПАМЯТЬ", color: "var(--pink)", lo: 25, hi: 95},
-  {key: "cpu", name: "ПРОЦЕССОР", color: "var(--green)", lo: 30, hi: 95},
-  {key: "ram", name: "ОПЕРАТИВКА", color: "var(--amber)", lo: 30, hi: 95},
+/* ------------------------------------------------------------ helpers -- */
+const fin = v => typeof v === "number" && isFinite(v);
+const f1 = v => fin(v) ? (v >= 100 ? Math.round(v).toString() : v.toFixed(1)) : "—";
+function mtok(n){ if (!fin(n)) return "—"; if (n >= 1e9) return (n/1e9).toFixed(2)+"B"; if (n >= 1e6) return (n/1e6).toFixed(2)+"M";
+  if (n >= 1e4) return Math.round(n/1e3)+"K"; return String(Math.round(n)); }
+function upt(s){ if (!fin(s)) return "—"; const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60);
+  return d ? `${d}д ${h}ч` : h ? `${h}ч ${m}м` : `${m}м`; }
+function mix(a, b, t){ const p = x => [1,3,5].map(i => parseInt(x.substr(i,2),16)); const A = p(a), B = p(b);
+  return "#"+A.map((v,i) => Math.round(v+(B[i]-v)*t).toString(16).padStart(2,"0")).join(""); }
+function heat(t){ if (!fin(t)) return C.dim; if (t < 55) return mix(C.dim, C.paper, Math.max(0,(t-35)/20));
+  if (t < 75) return mix(C.paper, C.warm, (t-55)/20); return mix(C.warm, C.hot, Math.min(1,(t-75)/12)); }
+function text(el, v){ v = String(v); if (el.textContent !== v) el.textContent = v; }
+function fit(cv){ const r = cv.getBoundingClientRect(), k = devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(r.width*k)), h = Math.max(1, Math.round(r.height*k));
+  if (cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; } return [w, h, k]; }
+
+/* ------------------------------------------------------------ meters -- */
+const METERS = [
+  {k:"gpu",  name:"GPU"}, {k:"vram", name:"VRAM"}, {k:"cpu", name:"CPU"},
+  {k:"ram",  name:"RAM"}, {k:"pwr",  name:"Питание"}
 ];
-function buildSensors() {
-  $("sensors").innerHTML = ROWS.map(r => `
-    <div class="srow">
-      <div class="sname">${r.name}</div>
-      <div class="track"><div class="fill" id="load_${r.key}"
-           style="width:0%;background:${r.color}"></div></div>
-      <div class="sval" id="loadtxt_${r.key}">—</div>
-      <div class="track heat"><div class="fill" id="temp_${r.key}"
-           style="width:0%"></div></div>
-      <div class="stemp" id="temptxt_${r.key}">—</div>
-    </div>`).join("");
-  $("sensors").querySelectorAll(".srow").forEach(row => {
-    const tracks = row.querySelectorAll(".track");
-    if (tracks.length === 2) row.style.gridTemplateColumns = "132px 1fr 88px 1fr 74px";
-  });
-}
-buildSensors();
+$("meters").innerHTML = METERS.map(m => `<div class="m" id="m-${m.k}">
+  <div class="mlbl"><span class="lbl">${m.name}</span><small id="ms-${m.k}"></small></div>
+  <canvas id="mc-${m.k}"></canvas>
+  <div class="mval"><span id="mv-${m.k}">—</span><small id="mu-${m.k}">%</small></div>
+  <div class="mtemp" id="mt-${m.k}"></div></div>`).join("");
+const meterState = {};
+METERS.forEach(m => meterState[m.k] = {v: 0, shown: 0, peak: 0, peakAt: 0});
 
-function drawChart() {
-  const w = 600, h = 110, base = h - 14, d = hist.slice(-48);
-  const bars = $("bars"), grid = $("grid");
-  bars.innerHTML = ""; grid.innerHTML = "";
-  for (let k = 1; k < 4; k++) {
-    const x = (w * k / 4).toFixed(1);
-    grid.innerHTML += `<line x1="${x}" y1="8" x2="${x}" y2="${base}"
-      stroke="#131c2c" stroke-width="1"/>`;
+function drawComb(k){
+  const cv = $("mc-"+k), st = meterState[k]; const [w, h, s] = fit(cv);
+  const g = cv.getContext("2d"); g.clearRect(0, 0, w, h);
+  const seg = 3*s, gap = 2*s, n = Math.floor((w+gap)/(seg+gap));
+  const lit = st.shown/100*n, pk = Math.min(n-1, Math.floor(st.peak/100*n));
+  for (let i = 0; i < n; i++){
+    const x = i*(seg+gap), on = i < lit, part = on && i+1 > lit ? lit - i : 1;
+    const tall = (i % 10 === 9) ? h : h*0.78, y = (h-tall)/2;
+    if (on){
+      const a = 0.35 + 0.65*(i/n);
+      g.globalAlpha = a*part; g.fillStyle = C.paper; g.fillRect(x, y, seg, tall);
+      g.globalAlpha = 1;
+    } else { g.fillStyle = C.line2; g.fillRect(x, y+tall*0.3, seg, tall*0.4); }
   }
-  grid.innerHTML += `<line x1="0" y1="${base}" x2="${w}" y2="${base}"
-    stroke="#1b2942" stroke-width="1"/>`;
-  if (!d.length) return;
-  const peak = Math.max(...d);
-  if (peak <= 0.5) {
-    grid.innerHTML += `<text x="${w / 2}" y="${h / 2}" fill="#6b7a96" font-size="13"
-      text-anchor="middle" font-family="monospace">ДВИЖОК ПРОСТОИВАЕТ · 0 ТОК/С</text>`;
-    $("spark").setAttribute("points", "");
+  if (st.peak > 1){ g.fillStyle = C.out; g.fillRect(pk*(seg+gap), 0, seg, h); }
+}
+function setMeter(k, pct, val, unit, sub, temp, off){
+  const st = meterState[k];
+  st.v = fin(pct) ? Math.max(0, Math.min(100, pct)) : 0;
+  const now = performance.now();
+  if (st.v >= st.peak || now - st.peakAt > 8000){ st.peak = st.v; st.peakAt = now; }
+  text($("mv-"+k), val); text($("mu-"+k), unit); text($("ms-"+k), sub || "");
+  const te = $("mt-"+k); text(te, fin(temp) ? Math.round(temp)+"°" : ""); te.style.color = heat(temp);
+  $("m-"+k).classList.toggle("off", !!off);
+}
+
+/* ---------------------------------------------------------- odometer -- */
+let odoStr = "";
+function setOdo(n){
+  const el = $("odo");
+  const s = fin(n) ? Math.round(n).toLocaleString("ru-RU").replace(/\s/g, " ") : "—";
+  if (s.length !== odoStr.length){
+    el.innerHTML = [...s].map(ch => /\d/.test(ch)
+      ? `<span class="d"><span>${[0,1,2,3,4,5,6,7,8,9].map(d => `<i>${d}</i>`).join("")}</span></span>`
+      : `<span class="sep">${ch === " " ? "" : ch}</span>`).join("");
+  }
+  [...s].forEach((ch, i) => { const col = el.children[i]; if (/\d/.test(ch) && col.firstChild)
+    col.firstChild.style.transform = `translateY(-${+ch}em)`; });
+  odoStr = s;
+}
+
+/* -------------------------------------------------------------- core -- */
+function drawCore(cv, t){
+  const g = cv.getContext("2d"), w = cv.width, h = cv.height, cx = w/2, cy = h/2, R = w*0.44;
+  g.clearRect(0, 0, w, h);
+  const st = !online ? "off" : (D.strata && D.strata.up ? D.strata.state : (D.comfyui && D.comfyui.running ? "generating" : "idle"));
+  g.lineWidth = w*0.035;
+  g.strokeStyle = C.line2; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI*2); g.stroke();
+  if (st === "off"){
+    g.strokeStyle = C.hot; g.setLineDash([w*0.06, w*0.08]); g.lineDashOffset = -t/60;
+    g.beginPath(); g.arc(cx, cy, R, 0, Math.PI*2); g.stroke(); g.setLineDash([]);
     return;
   }
-  const slot = w / 48;
-  const pts = [];
-  d.forEach((v, i) => {
-    const x = i * slot, hh = (v / peak) * (base - 10);
-    const col = heat(v / peak);
-    if (hh >= 1) {
-      bars.innerHTML += `<rect x="${x.toFixed(1)}" y="${(base - hh).toFixed(1)}"
-        width="${(slot - 1.6).toFixed(1)}" height="${hh.toFixed(1)}"
-        fill="${col}" opacity="0.35"/>`;
-      bars.innerHTML += `<rect x="${x.toFixed(1)}" y="${(base - hh).toFixed(1)}"
-        width="${(slot - 1.6).toFixed(1)}" height="2" fill="${col}"/>`;
+  const gpu = (D.gpu && fin(D.gpu.util)) ? D.gpu.util/100 : 0;
+  g.strokeStyle = C.paper; g.beginPath(); g.arc(cx, cy, R, -Math.PI/2, -Math.PI/2 + Math.PI*2*gpu); g.stroke();
+  if (st === "generating"){
+    const sp = Math.max(0.6, Math.min(3, (D.strata && D.strata.tok_s || 40)/30));
+    for (let k = 0; k < 3; k++){
+      const p = ((t/1000*sp) + k/3) % 1;
+      g.globalAlpha = 1 - p; g.strokeStyle = C.out; g.lineWidth = w*0.02;
+      g.beginPath(); g.arc(cx, cy, R*0.18 + R*0.62*p, 0, Math.PI*2); g.stroke();
     }
-    pts.push((x + slot / 2).toFixed(1) + "," + (base - hh).toFixed(1));
-  });
-  $("spark").setAttribute("points", pts.join(" "));
-  grid.innerHTML += `<text x="4" y="14" fill="#8fd8ea" font-size="12"
-    font-family="monospace">пик ${peak.toFixed(1)} ток/с</text>
-    <text x="${w - 4}" y="${h - 3}" fill="#6b7a96" font-size="11"
-    text-anchor="end" font-family="monospace">сейчас</text>`;
-}
-
-async function tick() {
-  try {
-    const t0 = performance.now();
-    const r = await fetch(server + "/api/stats", {
-      cache: "no-store",
-      headers: token ? {"X-Token": token} : {}
-    });
-    if (r.status === 401) throw new Error("401 unauthorized");
-    const d = await r.json();
-    const lat = Math.round(performance.now() - t0);
-    const cpu = d.cpu || {}, gpu = d.gpu || {}, st = d.strata || {}, cf = d.comfyui || {};
-    const t = d.temps || {}, tkn = d.tokens || {}, today = tkn.today || {}, all = tkn.all_time || {};
-
-    $("dot").style.background = "var(--cyan)";
-    $("host").textContent = (d.agent?.hostname || "server") + " · онлайн";
-    $("lat").textContent = lat + " мс";
-
-    // gauges
-    const util = Number(gpu.util || 0), cpup = Number(cpu.percent || 0);
-    const pw = Number(gpu.power_w || 0), plim = Number(gpu.power_limit_w || 0);
-    setRing($("gArc"), $("gGlow"), util);
-    setRing($("cArc"), $("cGlow"), cpup);
-    setRing($("pArc"), $("pGlow"), plim ? 100 * pw / plim : 0);
-    $("gPct").textContent = Math.round(util) + "%";
-    $("cPct").textContent = Math.round(cpup) + "%";
-    $("pVal").textContent = pw ? Math.round(pw) : "—";
-    $("pLimit").textContent = plim ? "из " + Math.round(plim) + " W" : "мощность · W";
-    $("gName").textContent = gpu.name || "GPU";
-    $("cName").textContent = (cpu.cores || "—") + " ядер / " + (cpu.threads || "—") + " потоков";
-
-    // sensors, sorted GPU -> VRAM -> CPU -> RAM
-    const vals = {
-      gpu: {load: util, txt: Math.round(util) + "%", temp: t.gpu, hi: 90, lo: 25},
-      vram: {load: gpu.mem_total_gib ? 100 * gpu.mem_used_gib / gpu.mem_total_gib : 0,
-             txt: gpu.mem_total_gib ? gpu.mem_used_gib.toFixed(1) + "/" +
-                  Math.round(gpu.mem_total_gib) + "G" : "—",
-             temp: t.gpu_mem, hi: 95, lo: 25},
-      cpu: {load: cpup, txt: Math.round(cpup) + "%", temp: t.cpu,
-            hi: Number(t.cpu_limit || 95), lo: 30},
-      ram: {load: cpu.ram_total_gib ? 100 * cpu.ram_used_gib / cpu.ram_total_gib : 0,
-            txt: cpu.ram_total_gib ? cpu.ram_used_gib.toFixed(1) + "/" +
-                 Math.round(cpu.ram_total_gib) + "G" : "—",
-            temp: null, hi: 95, lo: 30},
-    };
-    ROWS.forEach(r => {
-      const v = vals[r.key];
-      const bar = $("load_" + r.key);
-      bar.style.width = Math.max(0, Math.min(100, v.load)).toFixed(1) + "%";
-      bar.style.background = v.load > 92 ? "var(--red)" : r.color;
-      $("loadtxt_" + r.key).textContent = v.txt;
-      const tt = $("temp_" + r.key), tv = $("temptxt_" + r.key);
-      if (v.temp == null) {
-        tt.style.width = "0%"; tv.textContent = "нет датчика"; tv.style.color = "var(--dim)";
-      } else {
-        const frac = Math.max(0, Math.min(1, (v.temp - v.lo) / (v.hi - v.lo)));
-        tt.style.width = (frac * 100).toFixed(1) + "%";
-        tv.textContent = Math.round(v.temp) + "°C";
-        tv.style.color = heat(frac);
-      }
-    });
-    const src = [t.cpu_source, gpu.name ? "nvidia-smi" : null].filter(Boolean).join(" · ");
-    $("src").textContent = src || "нет датчиков";
-
-    // both kinds of token speed
-    const liveDecode = Number(st.tok_s || 0);
-    const livePrefill = Number(st.prefill_tok_s_mean || 0);
-    const avgDecode = Number(st.decode_tok_s_avg || st.tok_s_mean || 0);
-    const avgPrefill = Number(st.prefill_tok_s_avg || 0);
-    $("decode").textContent = (liveDecode || avgDecode || 0).toFixed(1);
-    $("prefill").textContent = Math.round(livePrefill || avgPrefill || 0).toLocaleString("ru-RU")
-      .replace(/\u00a0/g, " ");
-    $("mean").textContent = liveDecode > 0
-      ? "живые значения · среднее за прогон ↑" + avgDecode.toFixed(1) +
-        " ↓" + Math.round(avgPrefill)
-      : "среднее за прогон";
-
-    hist.push(liveDecode); if (hist.length > 48) hist.shift();
-    drawChart();
-
-    // token counters, rounded to millions
-    $("todayIn").textContent = big(today.prompt);
-    $("todayOut").textContent = big(today.output);
-    $("allIn").textContent = big(all.prompt);
-    $("allOut").textContent = big(all.output);
-    $("todaySub").textContent = (today.requests || 0) + " запросов · кэш " + human(today.reused);
-    $("allSub").textContent = (all.requests || 0) + " запросов · кэш " + human(all.reused);
-    $("exact").textContent = "точные значения · сегодня " +
-      (today.total || 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ") +
-      " · всего " + (all.total || 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ") + " токенов";
-
-    const cs = $("chipStrata");
-    cs.textContent = st.up ? "Strata · " + (st.phase || st.state || "idle") : "Strata · off";
-    cs.className = "chip " + (st.up ? (st.state === "generating" ? "on" : "cyan") : "");
-    const cc = $("chipComfy");
-    cc.textContent = cf.up ? "ComfyUI · " + (cf.running || 0) + "▶ " + (cf.pending || 0) + "…"
-                           : "ComfyUI · off";
-    cc.className = "chip " + (cf.up ? "pink" : "");
-    $("chipReq").textContent = "запросов: " + (all.requests ?? st.total_requests ?? "—");
-    $("ctx").textContent = st.context ? Math.round(st.context / 1024) + "K" : "—";
-    $("phase").textContent = st.phase || st.state || "—";
-    $("gen").textContent = st.generated != null
-      ? st.generated + (st.max_tokens ? " / " + st.max_tokens : "") : "—";
-    $("queue").textContent = (st.queued ?? 0) + (cf.pending ? " + " + cf.pending : "");
-    $("cacheToday").textContent = human(today.reused);
-  } catch (e) {
-    $("dot").style.background = "var(--red)";
-    if (String(e).includes("401")) {
-      $("host").textContent = "нужен токен API";
-      $("token").style.display = "";
-    } else {
-      $("host").textContent = "нет связи";
-    }
+    g.globalAlpha = 1; g.fillStyle = C.out;
+    g.beginPath(); g.arc(cx, cy, R*0.2, 0, Math.PI*2); g.fill();
+  } else if (st === "reading"){
+    const s = D.strata, pr = (fin(s.prompt_read) && s.prompt_total) ? s.prompt_read/s.prompt_total : (t/2000 % 1);
+    g.fillStyle = C.in; g.beginPath(); g.moveTo(cx, cy);
+    g.arc(cx, cy, R*0.62, -Math.PI/2, -Math.PI/2 + Math.PI*2*pr); g.closePath(); g.fill();
+    g.strokeStyle = C.in; g.lineWidth = w*0.02; g.beginPath(); g.arc(cx, cy, R*0.62, 0, Math.PI*2); g.stroke();
+  } else {
+    const b = 0.5 + 0.5*Math.sin(t/900);
+    g.globalAlpha = 0.35 + 0.5*b; g.fillStyle = C.paper;
+    g.beginPath(); g.arc(cx, cy, R*(0.12 + 0.06*b), 0, Math.PI*2); g.fill(); g.globalAlpha = 1;
   }
-  setTimeout(tick, 1000);
 }
-tick();
+
+/* -------------------------------------------------------------- wave -- */
+let scaleDec = 80, scalePre = 800;
+function drawWave(cv, t, compact){
+  const [w, h, s] = fit(cv); const g = cv.getContext("2d"); g.clearRect(0, 0, w, h);
+  const mid = compact ? h*0.84 : h*0.6, upH = compact ? h*0.3 : mid - 6*s, dnH = compact ? h - mid - 2*s : h - mid - 6*s;
+  const mxD = Math.max(20, ...hist.dec), mxP = Math.max(200, ...hist.pre);
+  scaleDec += (mxD*1.15 - scaleDec)*0.05; scalePre += (mxP*1.15 - scalePre)*0.05;
+  const step = w/(N-1), frac = online ? Math.min(1, (performance.now() - hist.t)/1000) : 0;
+  const bw = Math.max(1*s, step*0.42);
+  if (!compact){
+    g.fillStyle = C.line; for (let y = 0; y <= 4; y++){ g.fillRect(0, Math.round(mid - upH*y/4), w, 1); }
+    g.fillStyle = C.line2; g.fillRect(0, Math.round(mid), w, s);
+  }
+  for (let i = 0; i < N; i++){
+    const x = w - (N-1-i+frac)*step; if (x < -step) continue;
+    const age = (N-1-i)/N, a = compact ? 0.9 : (0.25 + 0.75*(1-age));
+    const d = hist.dec[i], p = hist.pre[i];
+    if (d > 0){ const hh = Math.max(s, d/scaleDec*upH); g.globalAlpha = a; g.fillStyle = C.out; g.fillRect(x - bw/2, mid - hh, bw, hh); }
+    if (p > 0){ const hh = Math.max(s, p/scalePre*dnH); g.globalAlpha = a*0.85; g.fillStyle = C.in; g.fillRect(x - bw/2, mid + 2*s, bw, hh); }
+    if (!compact && !d && !p){ g.globalAlpha = a*0.5; g.fillStyle = C.faint; g.fillRect(x - s/2, mid - s, s, 2*s); }
+  }
+  g.globalAlpha = 1;
+  if (!compact){
+    // GPU load as a thin trace through the tape
+    g.strokeStyle = "rgba(236,233,226,.28)"; g.lineWidth = s; g.beginPath();
+    for (let i = 0; i < N; i++){ const x = w - (N-1-i+frac)*step, y = mid - (hist.gpu[i]/100)*upH;
+      i ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke();
+    // keep the big numbers legible: fade the tape out under the readouts
+    const fl = g.createLinearGradient(0, 0, Math.min(w*0.45, 520*s), 0); fl.addColorStop(0, "rgba(10,10,11,.92)"); fl.addColorStop(0.55, "rgba(10,10,11,.7)"); fl.addColorStop(1, "rgba(10,10,11,0)");
+    g.fillStyle = fl; g.fillRect(0, 0, Math.min(w*0.45, 520*s), h);
+    const gr = g.createLinearGradient(w - 60*s, 0, w, 0); gr.addColorStop(0, "rgba(10,10,11,0)"); gr.addColorStop(1, "rgba(198,244,50,.07)");
+    g.fillStyle = gr; g.fillRect(w - 60*s, 0, 60*s, h);
+    text($("scaleT"), Math.round(scaleDec)+" ток/с"); text($("scaleB"), Math.round(scalePre)+" ток/с");
+  }
+}
+
+/* ---------------------------------------------------------------- demo -- */
+const demo = (() => {
+  let req = null, today = {prompt:41250000, output:312116, requests:343}, all = {prompt:56660000, output:438901, requests:466}, recent = [], h = [];
+  const t0 = Date.now()/1000;
+  return () => {
+    const now = Date.now()/1000, r = Math.random;
+    if (!req && r() < 0.2) req = {phase:"reading", read:0, total:[1200,4400,34000,138000][Math.floor(r()*4)], gen:0, max:[256,512,1024][Math.floor(r()*3)], t:now};
+    let state = "idle", tok = 0, pre = 0;
+    if (req){
+      if (req.phase === "reading"){ pre = 600 + r()*90; req.read = Math.min(req.total, req.read + pre); state = "reading"; if (req.read >= req.total) req.phase = "gen"; }
+      else { tok = 55 + 10*Math.sin(now/3) + r()*6; req.gen = Math.min(req.max, req.gen + tok); state = "generating";
+        if (req.gen >= req.max){ recent.unshift({tok_s: +tok.toFixed(1), prefill_tok_s: 640 + r()*40, out: Math.round(req.gen), prompt: req.total, duration_s: now - req.t});
+          recent = recent.slice(0, 12); [today, all].forEach(b => { b.prompt += req.total; b.output += Math.round(req.gen); b.requests++; }); req = null; } }
+    }
+    h.push(tok); h = h.slice(-60);
+    const busy = state !== "idle", last = recent[0] || {};
+    return {time: now, agent: {version: "demo", hostname: "gpu-server", os: "Linux", uptime_s: now - t0 + 260000},
+      gpu: {name: "NVIDIA GeForce RTX 3060", util: busy ? 92 + r()*7 : 3 + r()*4, mem_used_gib: 10.9, mem_total_gib: 12, temp: 48 + (busy ? 24 : 0) + r()*3,
+            power_w: busy ? 150 + r()*18 : 18 + r()*4, power_limit_w: 170, count: 1},
+      cpu: {name: "AMD Ryzen 7 5700G", percent: state === "reading" ? 38 + r()*20 : busy ? 12 + r()*8 : 2 + r()*3, temp_c: 46 + r()*8, ram_used_gib: 38.9, ram_total_gib: 64, ram_percent: 61, uptime_s: now - t0 + 260000},
+      strata: {up: true, model: "Qwen3.8-Flash-Next IQ3_XXS", context: 262144, state, tok_s: tok, prefill_tok_s_mean: pre,
+               decode_tok_s_last: last.tok_s, prefill_tok_s_last: last.prefill_tok_s, decode_tok_s_avg: 61, prefill_tok_s_avg: 619,
+               generated: req && Math.round(req.gen), max_tokens: req && req.max, prompt_read: req && Math.round(req.read), prompt_total: req && req.total,
+               queued: 0, recent, history: {tok_s: h}},
+      comfyui: {up: true, version: "0.3.66", vram_free_gib: 1.1, running: r() < 0.3 ? 1 : 0, pending: [0,0,1,2][Math.floor(r()*4)]},
+      tokens: {today: {...today, total: today.prompt + today.output}, all_time: {...all, total: all.prompt + all.output}}};
+  };
+})();
+
+/* ------------------------------------------------------------- fetch -- */
+async function poll(){
+  const s = cur(), t0 = performance.now();
+  try {
+    let d;
+    if (s.url === "demo") d = demo();
+    else {
+      const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 3500);
+      const r = await fetch(s.url.replace(/\/+$/, "") + "/api/stats", {cache: "no-store", signal: ctl.signal, headers: s.token ? {"X-Token": s.token} : {}});
+      clearTimeout(to);
+      if (r.status === 401){ throw Object.assign(new Error("Нужен токен"), {auth: true}); }
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      d = await r.json();
+    }
+    ping = performance.now() - t0; online = true; D = d; lastAt = Date.now(); ingest(d);
+  } catch (e) {
+    online = false; failMsg = e.auth ? "Нужен токен" : "Нет связи";
+    if (e.auth && !drawerOpen) openDrawer(true);
+    pushHist(0, 0, 0);
+  }
+  render();
+  setTimeout(poll, 1000);
+}
+function pushHist(d, p, g){
+  ["dec","pre","gpu"].forEach((k, i) => { hist[k].push([d, p, g][i]); hist[k].shift(); });
+  hist.t = performance.now();
+}
+function ingest(d){
+  const s = d.strata || {}, g = d.gpu || {};
+  if (!seeded && s.up && s.history && s.history.tok_s){
+    const a = s.history.tok_s.slice(-N); hist.dec.splice(N - a.length, a.length, ...a); seeded = true;
+  }
+  const busy = s.up && s.state === "generating", rd = s.up && s.state === "reading";
+  pushHist(busy ? (s.tok_s || 0) : 0, rd ? (s.prefill_tok_s_mean || 0) : 0, fin(g.util) ? g.util : 0);
+}
+
+/* ------------------------------------------------------------ render -- */
+const STATE_RU = {generating: "Генерация", reading: "Чтение промпта", idle: "Ожидание", unloaded: "Модель выгружена"};
+function render(){
+  const s = cur();
+  $("app").style.setProperty("--x", 0);
+  if (!online || !D){
+    text($("state"), failMsg); $("state").style.color = C.hot;
+    text($("where"), s.name + " · " + s.url);
+    text($("mState"), failMsg); text($("mDec"), "—");
+    document.title = "TokenPulse · " + failMsg.toLowerCase();
+    renderList(); return;
+  }
+  const st = D.strata || {}, g = D.gpu || {}, c = D.cpu || {}, cf = D.comfyui || {}, tk = D.tokens || {}, a = D.agent || {};
+  let state = st.up ? (STATE_RU[st.state] || st.state) : (cf.up ? (cf.running ? "ComfyUI · рендер" : "ComfyUI · ожидание") : "Только железо");
+  if (st.up && st.queued) state += " · очередь " + st.queued;
+  text($("state"), state);
+  $("state").style.color = st.state === "generating" ? C.out : st.state === "reading" ? C.in : C.paper;
+  const model = st.up ? st.model : cf.up ? "ComfyUI " + (cf.version || "") : (g.name || "");
+  $("where").innerHTML = `<b>${esc(a.hostname || s.name)}</b> · ${esc(model || "—")}${st.context ? " · " + Math.round(st.context/1024) + "K контекст" : ""}`;
+
+  // hero
+  const gen = st.state === "generating", rd = st.state === "reading";
+  const dec = gen ? st.tok_s : (st.decode_tok_s_last || st.decode_tok_s_avg);
+  const pre = rd ? st.prefill_tok_s_mean : (st.prefill_tok_s_last || st.prefill_tok_s_avg);
+  text($("dec"), st.up ? f1(dec) : "—"); text($("pre"), st.up ? f1(pre) : "—");
+  $("roOut").classList.toggle("idle", !gen); $("roIn").classList.toggle("idle", !rd);
+  text($("decSub"), gen ? "ток/с сейчас" : "ток/с последний"); text($("preSub"), rd ? "ток/с сейчас" : "ток/с последний");
+  const job = $("job");
+  if (rd && st.prompt_total){ job.style.width = (st.prompt_read/st.prompt_total*100) + "%"; job.style.background = C.in; }
+  else if (gen && st.max_tokens){ job.style.width = (st.generated/st.max_tokens*100) + "%"; job.style.background = C.out; }
+  else job.style.width = "0";
+
+  // meters
+  const vu = fin(g.mem_used_gib) ? g.mem_used_gib : (g.mem_used_mib || 0)/1024, vt = fin(g.mem_total_gib) ? g.mem_total_gib : (g.mem_total_mib || 0)/1024;
+  const noGpu = !g.count && !fin(g.util);
+  const gname = (g.name || "").replace(/^NVIDIA\s+|GeForce\s+/g, "") + (g.count > 1 ? " ×" + g.count : "");
+  setMeter("gpu", g.util, fin(g.util) ? Math.round(g.util) : "—", "%", gname, g.temp, noGpu);
+  setMeter("vram", vt ? vu/vt*100 : null, vt ? vu.toFixed(1) : "—", vt ? "/" + Math.round(vt) + "G" : "", vt ? Math.round(vu/vt*100) + "%" : "", g.temp_mem, !vt);
+  setMeter("cpu", c.percent, fin(c.percent) ? Math.round(c.percent) : "—", "%", ((c.name || "").split(/\s+/).filter(w => /\d/.test(w) && !/GHz|CPU/i.test(w)).pop() || ""), c.temp_c);
+  setMeter("ram", c.ram_total_gib ? c.ram_used_gib/c.ram_total_gib*100 : c.ram_percent, fin(c.ram_used_gib) ? c.ram_used_gib.toFixed(1) : "—",
+           c.ram_total_gib ? "/" + Math.round(c.ram_total_gib) + "G" : "", fin(c.ram_percent) ? Math.round(c.ram_percent) + "%" : "", null);
+  setMeter("pwr", g.power_limit_w ? g.power_w/g.power_limit_w*100 : null, fin(g.power_w) ? Math.round(g.power_w) : "—", "Вт",
+           g.power_limit_w ? "из " + Math.round(g.power_limit_w) : "", null, !fin(g.power_w));
+
+  // tokens
+  const td = tk.today || {}, al = tk.all_time || {};
+  setOdo(td.total);
+  const tot = (td.prompt || 0) + (td.output || 0);
+  $("spIn").style.flexGrow = tot ? Math.max(0.02, td.prompt/tot) : 1; $("spOut").style.flexGrow = tot ? Math.max(0.02, td.output/tot) : 0;
+  text($("tIn"), mtok(td.prompt)); text($("tOut"), mtok(td.output)); text($("tReq"), fin(td.requests) ? td.requests : "—");
+  text($("tAll"), mtok(al.total));
+
+  // comfy
+  $("comfy").hidden = !cf.up;
+  if (cf.up){
+    text($("cRun"), cf.running || 0); text($("cVer"), cf.version || "");
+    text($("cVram"), fin(cf.vram_free_gib) ? cf.vram_free_gib.toFixed(1) + "G" : "—");
+    const dots = [...Array(cf.running || 0)].map(() => '<i class="run"></i>').concat([...Array(Math.min(12, cf.pending || 0))].map(() => '<i class="wait"></i>'));
+    const html = dots.join("") || "<i></i>"; if ($("cDots").innerHTML !== html) $("cDots").innerHTML = html;
+  }
+
+  // recent
+  const rec = (st.recent || []).slice(0, 6);
+  const mxT = Math.max(1, ...rec.map(r => (r.prompt || 0) + (r.out || 0)));
+  const rh = rec.length ? rec.map(r => { const p = r.prompt || 0, o = r.out || 0;
+    return `<div class="r"><span>${mtok(p)}→${mtok(o)}</span><span class="bar"><i class="bi" style="width:${p/mxT*100}%"></i><i class="bo" style="width:${Math.max(2, o/mxT*100)}%"></i></span><b>${fin(r.duration_s) ? r.duration_s.toFixed(1) + " с" : ""}</b><span class="sp">${f1(r.tok_s)}</span></div>`; }).join("")
+    : '<div class="empty">Запросов пока не было</div>';
+  if ($("recent").innerHTML !== rh) $("recent").innerHTML = rh;
+
+  text($("fAgent"), (a.version || "—") + " · " + (a.os || "")); text($("fPing"), fin(ping) ? Math.round(ping) + " мс" : "—"); text($("fUp"), upt(a.uptime_s || c.uptime_s));
+
+  // mini
+  text($("mDec"), st.up ? f1(gen ? st.tok_s : rd ? st.prefill_tok_s_mean : dec) : fin(g.util) ? Math.round(g.util) + "%" : "—");
+  $("mDec").style.color = rd ? C.in : C.out; $("mDec").classList.toggle("idle", !gen && !rd);
+  text($("mState"), (st.up ? (gen ? "ток/с · генерация" : rd ? "ток/с · чтение" : "ток/с · ожидание") : state) + " · " + (a.hostname || s.name));
+  const tmax = Math.max(g.temp || 0, c.temp_c || 0);
+  miniBar("Gpu", g.util, fin(g.util) ? Math.round(g.util) : "—");
+  miniBar("Vr", vt ? vu/vt*100 : 0, vt ? Math.round(vu/vt*100) : "—");
+  miniBar("T", tmax, tmax ? Math.round(tmax) + "°" : "—"); $("mTT").style.background = heat(tmax);
+  const mt = $("mT"); mt.className = tmax >= 80 ? "hot" : tmax >= 68 ? "warm" : "";
+
+  document.title = st.up ? `${f1(gen ? st.tok_s : dec)} ток/с · GPU ${fin(g.util) ? Math.round(g.util) : "—"}% — ${a.hostname || s.name}`
+                         : `GPU ${fin(g.util) ? Math.round(g.util) : "—"}% · ${a.hostname || s.name}`;
+  favicon(g.util, gen ? C.out : rd ? C.in : C.paper);
+  renderList();
+}
+function miniBar(k, pct, v){ $("m"+k+"T").style.width = Math.max(0, Math.min(100, pct || 0)) + "%"; text($("m"+k), v); }
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+
+let favAt = 0;
+function favicon(u, col){
+  if (Date.now() - favAt < 2000) return; favAt = Date.now();
+  const cv = document.createElement("canvas"); cv.width = cv.height = 64; const g = cv.getContext("2d");
+  g.fillStyle = C.bg; g.fillRect(0, 0, 64, 64);
+  g.lineWidth = 9; g.strokeStyle = C.line2; g.beginPath(); g.arc(32, 32, 24, 0, Math.PI*2); g.stroke();
+  g.strokeStyle = col; g.beginPath(); g.arc(32, 32, 24, -Math.PI/2, -Math.PI/2 + Math.PI*2*Math.max(0.02, (u || 0)/100)); g.stroke();
+  $("favicon").href = cv.toDataURL();
+}
+
+/* ----------------------------------------------------------- animate -- */
+function frame(t){
+  if (!document.body.classList.contains("is-mini")){
+    drawCore($("core"), t); drawWave($("wave"), t, false);
+    METERS.forEach(m => { const st = meterState[m.k]; st.shown += (st.v - st.shown)*0.12; drawComb(m.k); });
+  }
+  const pipOpen = pipWin && !pipWin.closed;
+  if (document.body.classList.contains("is-mini") || pipOpen){ drawCore($("mcore"), t); drawWave($("mwave"), t, true); }
+  requestAnimationFrame(frame);
+}
+
+/* -------------------------------------------------------------- mini -- */
+let forcedMini = store.get("mini", false) || params.get("mini") != null;
+function applyMini(){
+  const auto = innerWidth <= 360 || innerHeight <= 170;
+  document.body.classList.toggle("is-mini", (forcedMini || auto) && !(pipWin && !pipWin.closed));
+}
+addEventListener("resize", applyMini);
+$("miniBtn").onclick = () => { forcedMini = true; store.set("mini", true); applyMini(); };
+$("mExp").onclick = expand;
+$("mini").ondblclick = expand;
+function expand(){
+  if (pipWin && !pipWin.closed){ pipWin.close(); return; }
+  forcedMini = false; store.set("mini", false); applyMini();
+}
+
+let pipWin = null;
+async function openPip(){
+  if (!("documentPictureInPicture" in window)){
+    forcedMini = true; store.set("mini", true); applyMini();
+    alert("Окно поверх всех окон доступно в Chrome и Edge 116+. Включён компактный режим в этом окне.");
+    return;
+  }
+  if (pipWin && !pipWin.closed){ pipWin.close(); return; }
+  pipWin = await documentPictureInPicture.requestWindow({width: 400, height: 96});
+  [...document.querySelectorAll("style, link[rel=stylesheet]")].forEach(n => pipWin.document.head.appendChild(n.cloneNode(true)));
+  pipWin.document.body.style.cssText = "margin:0;background:#0a0a0b";
+  const m = $("mini"); m.classList.add("in-pip"); pipWin.document.body.appendChild(m);
+  pipWin.addEventListener("pagehide", () => { m.classList.remove("in-pip"); document.body.appendChild(m); pipWin = null; applyMini(); });
+  document.body.classList.remove("is-mini");
+}
+$("pipBtn").onclick = openPip;
+
+/* ------------------------------------------------------------ drawer -- */
+let drawerOpen = false;
+function openDrawer(on){ drawerOpen = on; $("drawer").classList.toggle("open", on); $("scrim").classList.toggle("open", on);
+  if (on && failMsg === "Нужен токен" && !online){ $("fUrl").value = cur().url; $("fName").value = cur().name; $("fTok").focus(); } }
+$("srvBtn").onclick = () => openDrawer(!drawerOpen); $("fClose").onclick = $("scrim").onclick = () => openDrawer(false);
+function renderList(){
+  const html = servers.map((s, i) => `<div class="srv ${s.url === active ? (online ? "on" : "") : ""}">
+    <span class="led"></span><div><div class="nm">${esc(s.name)}</div><div class="url">${esc(s.url === "demo" ? "встроенные тестовые данные" : s.url)}${s.token ? " · токен" : ""}</div></div>
+    <div class="act">${s.url === active ? "" : `<button class="btn" data-use="${i}">Открыть</button>`}<button class="btn" data-del="${i}" title="Удалить">×</button></div></div>`).join("");
+  if ($("srvList").innerHTML !== html) $("srvList").innerHTML = html;
+}
+$("srvList").onclick = e => {
+  const u = e.target.dataset.use, d = e.target.dataset.del;
+  if (u != null) switchTo(servers[+u].url);
+  if (d != null){ const s = servers[+d]; servers.splice(+d, 1); if (!servers.length) servers.push({name: "Демо-данные", url: "demo", token: ""});
+    store.set("servers", servers); if (s.url === active) switchTo(servers[0].url); else renderList(); }
+};
+$("fAdd").onclick = () => {
+  let url = $("fUrl").value.trim().replace(/\/+$/, ""); const name = $("fName").value.trim(), token = $("fTok").value.trim();
+  if (!url){ text($("fErr"), "Укажите адрес агента"); return; }
+  if (url !== "demo" && !/^https?:\/\//.test(url)) url = "http://" + url;
+  if (url !== "demo" && !/:\d+$/.test(url.replace(/^https?:\/\//, ""))) url += ":8787";
+  const ex = servers.find(s => s.url === url);
+  if (ex){ if (name) ex.name = name; ex.token = token; } else servers.push({name: name || url.replace(/^https?:\/\//, ""), url, token});
+  store.set("servers", servers); text($("fErr"), ""); $("fUrl").value = $("fName").value = $("fTok").value = ""; switchTo(url); openDrawer(false);
+};
+function switchTo(url){
+  active = url; store.set("active", url); online = false; D = null; seeded = false; failMsg = "Подключение";
+  Object.keys(hist).forEach(k => Array.isArray(hist[k]) && hist[k].fill(0)); render();
+}
+addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") { if (e.key === "Enter") $("fAdd").click(); if (e.key === "Escape") openDrawer(false); return; }
+  const k = e.key.toLowerCase();
+  if (k === "m" || k === "ь") document.body.classList.contains("is-mini") ? expand() : $("miniBtn").click();
+  else if (k === "p" || k === "з") openPip();
+  else if (k === "s" || k === "ы") openDrawer(!drawerOpen);
+  else if (k === "escape") openDrawer(false);
+});
+
+applyMini(); render(); poll(); requestAnimationFrame(frame);
 </script>
 </body>
 </html>
