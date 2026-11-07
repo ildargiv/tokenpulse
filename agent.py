@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Strata + ComfyUI monitor agent.
+Strata / llama.cpp / LM Studio / Ollama / vLLM + ComfyUI monitor agent.
 
 Runs on the GPU server, collects:
   * CPU load / RAM / swap
   * GPU load / VRAM / temperature / power  (nvidia-smi)
-  * Strata  /metrics  (tok/s, queue, context, request history)
+  * the inference engine: Strata /metrics, llama.cpp, vLLM, LM Studio, Ollama or any
+    OpenAI-compatible server (found automatically on the usual local ports, see engines.py)
   * ComfyUI /system_stats + /queue
 
 Exposes a JSON API (CORS *, no auth by default; set TP_TOKEN to require a token):
@@ -37,7 +38,9 @@ from urllib.error import URLError
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
-VERSION = "1.1.0"
+import engines
+
+VERSION = "1.2.0"
 WINDOWS = os.name == "nt"
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(HERE, "web")
@@ -899,6 +902,32 @@ class TokenLedger:
                 self._prune()
                 self._save()
 
+    def add_counters(self, key, prompt, output):
+        """Engines that only expose token counters (llama.cpp --metrics, vLLM): add the growth
+        since the last sample. The first sample is the baseline, a drop means the engine restarted."""
+        with self.lock:
+            if not hasattr(self, "_counters"):
+                self._counters = {}
+            prev = self._counters.get(key)
+            self._counters[key] = (int(prompt or 0), int(output or 0))
+            if prev is None:
+                return
+            dp, do = self._counters[key][0] - prev[0], self._counters[key][1] - prev[1]
+            if dp < 0 or do < 0 or (dp == 0 and do == 0):
+                return
+            day = datetime.now().strftime("%Y-%m-%d")
+            d = self.data["days"].setdefault(day, {"prompt": 0, "output": 0, "reused": 0, "requests": 0})
+            d["prompt"] += dp
+            d["output"] += do
+            a = self.data["all_time"]
+            a["prompt"] += dp
+            a["output"] += do
+            self._prune()
+            now = time.time()
+            if now - getattr(self, "_saved_at", 0) > 5:
+                self._saved_at = now
+                self._save()
+
     def _prune(self):
         days = self.data.get("days") or {}
         if len(days) <= 420:
@@ -949,10 +978,67 @@ class TokenLedger:
 # sampler
 # --------------------------------------------------------------------------- #
 
+class EngineEntry:
+    """One configured engine address: finds out what it is, then samples it every second."""
+
+    def __init__(self, url, kind="auto", explicit=False):
+        self.url = url.rstrip("/")
+        self.want = kind
+        self.kind = None if kind == "auto" else kind
+        self.explicit = explicit
+        self.adapter = None
+        self.next_probe = 0.0
+        self.fails = 0
+
+    def sample(self, gpu_util, other_busy):
+        now = time.time()
+        if self.kind is None:
+            if now < self.next_probe:
+                return {"up": False, "kind": None, "name": self.url, "url": self.url}
+            self.kind = engines.detect(self.url)
+            self.next_probe = now + 10
+            self.adapter = None
+            if self.kind is None:
+                return {"up": False, "kind": None, "name": self.url, "url": self.url}
+        if self.kind == "strata":
+            res = collect_strata(self.url)
+            if res.get("up"):
+                res.update(kind="strata", name="Strata", url=self.url)
+                res.setdefault("speed", "live")
+            else:
+                res = {"up": False, "kind": "strata", "name": "Strata", "url": self.url}
+        else:
+            if self.adapter is None:
+                self.adapter = engines.make_adapter(self.kind, self.url)
+            res = self.adapter.sample(gpu_util, other_busy)
+        if res.get("up"):
+            self.fails = 0
+        else:
+            self.fails += 1
+            if self.fails >= 3 and self.want == "auto":
+                self.kind, self.fails, self.next_probe = None, 0, now + 5
+        return res
+
+
+class EngineSet:
+    def __init__(self, targets):
+        self.entries = [EngineEntry(u, k, explicit) for k, u, explicit in targets]
+
+    def sample(self, gpu_util, other_busy):
+        results = [e.sample(gpu_util, other_busy) for e in self.entries]
+        up = [r for r in results if r.get("up")]
+        busy = [r for r in up if r.get("state") in ("generating", "reading")]
+        primary = (busy or up or [results[0] if results else {"up": False}])[0]
+        chips = [{"kind": r.get("kind"), "name": r.get("name"), "url": r.get("url"), "up": bool(r.get("up")),
+                  "state": r.get("state"), "model": r.get("model")}
+                 for e, r in zip(self.entries, results) if r.get("up") or e.explicit]
+        return results, primary, chips
+
+
 class Sampler(threading.Thread):
-    def __init__(self, strata_url, comfy_url, interval=1.0):
+    def __init__(self, targets, comfy_url, interval=1.0):
         super().__init__(daemon=True)
-        self.strata_url = strata_url
+        self.engines = EngineSet(targets)
         self.comfy_url = comfy_url
         self.interval = max(0.3, float(interval))
         self.sys = SystemCollector()
@@ -991,13 +1077,19 @@ class Sampler(threading.Thread):
     def _collect(self):
         cpu = self.sys.sample()
         gpu = self.gpu.sample()
-        strata = collect_strata(self.strata_url)
         comfy = collect_comfy(self.comfy_url)
+        results, strata, chips = self.engines.sample(gpu.get("util") if gpu else None,
+                                                     bool(comfy.get("running")))
 
-        if strata.get("up"):
-            self.ledger.seed(strata.get("engine_totals") or {},
-                             strata.get("recent") or [])
-            self.ledger.update(strata.get("recent") or [])
+        for r in results:
+            if not r.get("up"):
+                continue
+            if r.get("kind") == "strata":
+                self.ledger.seed(r.get("engine_totals") or {}, r.get("recent") or [])
+                self.ledger.update(r.get("recent") or [])
+            elif r.get("engine_totals"):
+                et = r["engine_totals"]
+                self.ledger.add_counters(r.get("url"), et.get("prompt_tokens"), et.get("output_tokens"))
 
         # fall back to Strata's own hardware probe when nvidia-smi is unavailable
         hw = strata.get("hardware") or {}
@@ -1045,11 +1137,18 @@ class Sampler(threading.Thread):
             "gpu_source": gpu.get("name"),
         }
 
+        legacy = dict(strata)      # old clients (widget.py) read "strata" and expect numbers
+        for k in ("tok_s", "tok_s_mean", "prefill_tok_s_mean"):
+            if legacy.get("up"):
+                legacy[k] = legacy.get(k) or 0
+
         return {
             "cpu": cpu,
             "gpu": gpu,
             "temps": temps,
-            "strata": strata,
+            "engine": strata,
+            "engines": chips,
+            "strata": legacy,
             "comfyui": comfy,
             "tokens": self.ledger.snapshot(),
         }
@@ -1060,7 +1159,7 @@ class DemoSampler(Sampler):
     Lets you look at the clients without a GPU, Strata or ComfyUI."""
 
     def __init__(self, interval=1.0):
-        super().__init__("", "", interval)
+        super().__init__([], "", interval)
         import random
         self.rnd = random.Random(7)
         self.t0 = time.time()
@@ -1124,9 +1223,11 @@ class DemoSampler(Sampler):
                   "history": {"tok_s": list(self.hist)}}
         comfy = {"up": True, "version": "0.3.66", "device": "cuda:0 RTX 3060", "vram_total_gib": 12.0,
                  "vram_free_gib": 1.1, "running": 1 if r.random() < 0.3 else 0, "pending": r.choice([0, 0, 1, 2])}
+        strata.update(kind="strata", name="Strata", speed="live")
         return {"cpu": cpu_d, "gpu": gpu,
                 "temps": {"cpu": cpu_d["temp_c"], "gpu": gpu["temp"], "gpu_mem": None},
-                "strata": strata, "comfyui": comfy,
+                "engine": strata, "strata": strata, "comfyui": comfy,
+                "engines": [{"kind": "strata", "name": "Strata", "up": True, "state": state, "model": strata["model"]}],
                 "tokens": {"today": block(self.today), "all_time": block(self.all)}}
 
 
@@ -1250,7 +1351,13 @@ def main():
     ap = argparse.ArgumentParser(description="Strata/ComfyUI monitor agent")
     ap.add_argument("--host", default=os.environ.get("MONITOR_HOST", "0.0.0.0"))
     ap.add_argument("--port", type=int, default=int(os.environ.get("MONITOR_PORT", "8787")))
-    ap.add_argument("--strata", default=os.environ.get("STRATA_URL", "http://127.0.0.1:8080"))
+    ap.add_argument("--strata", default=os.environ.get("STRATA_URL", ""),
+                    help="Strata address (kept for compatibility, same as --engine)")
+    ap.add_argument("--engine", default=os.environ.get("ENGINE_URL", ""),
+                    help="engine address(es), comma separated: http://127.0.0.1:1234 or lmstudio=http://host:1234. "
+                         "Default: look for Strata, llama.cpp, LM Studio, Ollama and vLLM on their usual local ports")
+    ap.add_argument("--engine-kind", default=os.environ.get("ENGINE_KIND", "auto"),
+                    help="auto | strata | llamacpp | lmstudio | ollama | vllm | openai")
     ap.add_argument("--comfy", default=os.environ.get("COMFY_URL", "http://127.0.0.1:8188"))
     ap.add_argument("--interval", type=float, default=float(os.environ.get("MONITOR_INTERVAL", "1.0")))
     ap.add_argument("--token", default=os.environ.get("TP_TOKEN", ""),
@@ -1259,7 +1366,14 @@ def main():
                     help="synthetic data, no GPU / Strata / ComfyUI needed")
     args = ap.parse_args()
 
-    sampler = DemoSampler(args.interval) if args.demo else Sampler(args.strata, args.comfy, args.interval)
+    targets = []
+    for spec in (args.strata, args.engine):
+        for kind, url in engines.parse_targets(spec, engines.normalize_kind(args.engine_kind)):
+            targets.append((kind, url, True))
+    if not targets:
+        for port in (8080, 1234, 11434, 8000):     # Strata / llama.cpp, LM Studio, Ollama, vLLM
+            targets.append(("auto", "http://127.0.0.1:%d" % port, False))
+    sampler = DemoSampler(args.interval) if args.demo else Sampler(targets, args.comfy, args.interval)
     Handler.sampler = sampler
     Handler.token = (args.token or "").strip()
     sampler.start()
@@ -1268,7 +1382,7 @@ def main():
     srv.daemon_threads = True
     print("strata-monitor agent %s" % VERSION)
     print("  listen : http://%s:%d" % (args.host, args.port))
-    print("  strata : %s" % args.strata)
+    print("  engines: %s" % ", ".join(u for _, u, _ in targets))
     print("  comfy  : %s" % args.comfy)
     print("  local  : http://127.0.0.1:%d" % args.port)
     print("  demo   : %s" % ("on" if args.demo else "off"))

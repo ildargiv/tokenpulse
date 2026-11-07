@@ -6,8 +6,10 @@
 <meta name="theme-color" content="#0a0a0b">
 <title>TokenPulse</title>
 <link rel="icon" id="favicon" href="data:,">
+<script>try{var q=new URLSearchParams(location.search).get("skin")||JSON.parse(localStorage.getItem("tp2.skin"));document.documentElement.dataset.skin=q||"pulse"}catch(e){document.documentElement.dataset.skin="pulse"}</script>
+<script>window.TP={skins:{},list:[],register:function(d){if(d&&d.id&&!this.skins[d.id]){this.skins[d.id]=d;this.list.push(d)}}};</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Nunito:wght@600;700;800&family=Rajdhani:wght@500;600;700&display=swap">
 <style>
 :root{
   --bg:#0a0a0b; --bg2:#111113; --line:#1d1d20; --line2:#2a2a2e;
@@ -15,10 +17,20 @@
   --out:#c6f432;  /* выходные токены, декод */
   --in:#7fd4ff;   /* входные токены, чтение промпта */
   --warm:#ffb020; --hot:#ff4d1a;
+  --ui:"Nunito","Segoe UI",system-ui,sans-serif;
   --num:"Barlow Condensed","Bahnschrift","DIN Alternate","Roboto Condensed","Arial Narrow",sans-serif;
   --mono:"JetBrains Mono","Cascadia Mono",Consolas,"DejaVu Sans Mono",monospace;
   color-scheme:dark;
 }
+/* ---- skins are plug-ins (web/skins/*.js, see web/skins/README.md): each brings its own theme, layout and canvas code */
+.skin{display:none}
+.skin.on{display:block}
+:root[data-skin]:not([data-skin="pulse"]) #app{display:none}
+body.is-mini .skin{display:none!important}
+.dock{position:fixed;top:8px;right:8px;z-index:30;display:flex;gap:4px;opacity:.45;transition:opacity .2s}
+.dock:hover{opacity:1}
+:root[data-skin="pulse"] .dock,body.is-mini .dock{display:none}
+.dock .tool{width:28px;height:28px;background:color-mix(in srgb,var(--bg) 72%,transparent);backdrop-filter:blur(6px)}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{background:var(--bg);color:var(--paper);font:13px/1.35 var(--mono);overflow-x:hidden;
@@ -55,7 +67,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .readout.out{left:0;top:14px}
 .readout.in{left:0;bottom:12px}
 .readout .big{font:600 92px/.86 var(--num);font-stretch:condensed;font-variant-numeric:tabular-nums;
-              color:var(--out);text-shadow:0 0 30px rgba(198,244,50,.18);transition:color .4s,opacity .4s}
+              color:var(--out);text-shadow:0 0 30px color-mix(in srgb,var(--out) 18%,transparent);transition:color .4s,opacity .4s}
 .readout.in .big{font-size:38px;color:var(--in);text-shadow:none}
 .readout .row{display:flex;align-items:baseline;gap:10px}
 .readout .unit{font:500 11px var(--mono);color:var(--dim);letter-spacing:.12em;text-transform:uppercase}
@@ -130,7 +142,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 body.is-mini .app{display:none}
 body.is-mini .mini, .mini.in-pip{display:grid}
 body.is-mini{overflow:hidden}
-.mini{position:relative;height:100vh;min-height:84px;grid-template-columns:auto auto 1fr;align-items:center;gap:12px;
+.mini{position:relative;height:min(100vh,104px);min-height:84px;grid-template-columns:auto minmax(0,1fr) minmax(112px,150px);align-items:center;gap:12px;
       padding:0 12px 0 10px;overflow:hidden;background:var(--bg);user-select:none}
 .mini canvas.mwave{position:absolute;inset:0;width:100%;height:100%;opacity:.5;pointer-events:none}
 .mini > *:not(.mwave){position:relative;z-index:1}
@@ -138,8 +150,8 @@ body.is-mini{overflow:hidden}
 .mini .mnum{display:flex;flex-direction:column;gap:3px;min-width:0}
 .mini .mnum .big{font:600 44px/.85 var(--num);font-stretch:condensed;color:var(--out);font-variant-numeric:tabular-nums}
 .mini .mnum .big.idle{opacity:.4}
-.mini .mnum .lbl{font-size:9px;white-space:nowrap}
-.mini .mstats{display:grid;gap:4px;justify-self:end;min-width:120px;max-width:170px;width:100%}
+.mini .mnum .lbl{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini .mstats{display:grid;gap:4px;min-width:0}
 .ms{display:grid;grid-template-columns:30px 1fr 34px;align-items:center;gap:6px;font-size:9px;color:var(--dim);letter-spacing:.1em}
 .ms .t{height:4px;background:var(--line2);position:relative}
 .ms .t i{position:absolute;left:0;top:0;bottom:0;background:var(--paper);transition:width .6s}
@@ -171,15 +183,32 @@ body.is-mini{overflow:hidden}
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:39;opacity:0;pointer-events:none;transition:opacity .3s}
 .scrim.open{opacity:1;pointer-events:auto}
 .err{color:var(--hot);font-size:11px}
+.skins{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sk{height:66px;border:1px solid var(--line2);padding:7px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;text-align:left}
+.sk small{font:500 9px var(--mono);opacity:.7;letter-spacing:.04em}
+.sk i{display:block;height:5px}
+.sk span{font:500 9px var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.sk.on{outline:2px solid var(--paper);outline-offset:1px}
 
+/* narrow column: the size of the old desktop widget (364 x 812), everything fits without scrolling */
 @media (max-width:420px){
-  .app{padding:14px 14px 18px;gap:14px}
-  .readout .big{font-size:74px}
+  .app{padding:12px 14px 12px;gap:12px}
+  .core{width:38px;height:38px}
   .state{font-size:22px}
-  .tool{width:30px;height:30px}
-  .m{grid-template-columns:52px 1fr 62px 38px;gap:9px}
-  .m .mval{font-size:28px}
-  .odo{font-size:52px}
+  .tools{gap:3px}.tool{width:28px;height:28px}
+  .hero{height:140px}
+  .readout .big{font-size:60px}
+  .tokens{gap:8px}.comfy{padding-top:8px;gap:6px}.recent{padding-top:8px}.rlist{margin-top:6px;gap:5px}
+  .readout.in .big{font-size:30px}
+  .m{grid-template-columns:50px 1fr 58px 34px;gap:8px;padding:5px 0}
+  .m .mlbl small{max-width:50px}
+  .m canvas{height:24px}
+  .m .mval{font-size:26px}
+  .m .mtemp{font-size:17px}
+  .odo{font-size:40px}
+  .allrow{padding-top:6px}.allrow .num{font-size:24px}
+  .r:nth-child(n+4){display:none}
+  .foot{display:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -194,9 +223,9 @@ body.is-mini{overflow:hidden}
       <div class="where" id="where">—</div>
     </div>
     <div class="tools">
-      <button class="tool" id="pipBtn" title="Мини-окно поверх всех окон (P)"><svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11"/><rect x="8" y="8" width="5" height="4" fill="currentColor" stroke="none"/></svg></button>
-      <button class="tool" id="miniBtn" title="Компактный режим (M)"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button>
-      <button class="tool" id="srvBtn" title="Серверы (S)"><svg viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="4.5"/><rect x="2" y="9" width="12" height="4.5"/><path d="M4.5 4.75h1M4.5 11.25h1"/></svg></button>
+      <button class="tool" id="pipBtn" data-act="pip" title="Мини-окно поверх всех окон (P)"><svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11"/><rect x="8" y="8" width="5" height="4" fill="currentColor" stroke="none"/></svg></button>
+      <button class="tool" id="miniBtn" data-act="mini" title="Компактный режим (M)"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button>
+      <button class="tool" id="srvBtn" data-act="srv" title="Серверы (S)"><svg viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="4.5"/><rect x="2" y="9" width="12" height="4.5"/><path d="M4.5 4.75h1M4.5 11.25h1"/></svg></button>
     </div>
   </header>
 
@@ -249,6 +278,13 @@ body.is-mini{overflow:hidden}
   </footer>
 </main>
 
+<div id="skinHost"></div>
+<div class="dock" id="dock">
+  <button class="tool" data-act="pip" title="Мини-окно поверх всех окон (P)"><svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11"/><rect x="8" y="8" width="5" height="4" fill="currentColor" stroke="none"/></svg></button>
+  <button class="tool" data-act="mini" title="Компактный режим (M)"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button>
+  <button class="tool" data-act="srv" title="Серверы и оформление (S)"><svg viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="4.5"/><rect x="2" y="9" width="12" height="4.5"/><path d="M4.5 4.75h1M4.5 11.25h1"/></svg></button>
+</div>
+
 <div class="mini" id="mini" title="Двойной клик: развернуть">
   <canvas class="mwave" id="mwave"></canvas>
   <canvas class="mcore" id="mcore" width="68" height="68"></canvas>
@@ -265,16 +301,22 @@ body.is-mini{overflow:hidden}
 <aside class="drawer" id="drawer" aria-label="Серверы">
   <h3>Серверы</h3>
   <div id="srvList"></div>
+  <div class="fld"><span class="lbl">Оформление (клавиша K)</span><div class="skins" id="skins"></div></div>
   <div class="fld"><span class="lbl">Название</span><input id="fName" placeholder="Сервер V100"></div>
   <div class="fld"><span class="lbl">Адрес агента</span><input id="fUrl" placeholder="http://192.168.31.30:8787"></div>
   <div class="fld"><span class="lbl">Токен (если задан TP_TOKEN)</span><input id="fTok" placeholder="необязательно"></div>
   <div style="display:flex;gap:6px"><button class="btn pri" id="fAdd">Добавить и подключить</button><button class="btn" id="fClose">Закрыть</button></div>
   <div class="err" id="fErr"></div>
   <p class="hint">На сервере запустите <kbd>agent.py</kbd>. Адрес вида <kbd>http://IP:8787</kbd>.
-    Мини-окно поверх всех окон работает в Chrome и Edge (кнопка <kbd>▣</kbd> или клавиша <kbd>P</kbd>).
+    Оформление меняется клавишей <kbd>K</kbd> или здесь. Мини-окно поверх всех окон работает в Chrome и Edge (кнопка <kbd>▣</kbd> или клавиша <kbd>P</kbd>).
     Если сузить окно, монитор сам переходит в компактный вид. Пока окно свёрнуто, скорость и загрузка видны в заголовке и на иконке.</p>
 </aside>
 
+<script src="skins/console.js"></script>
+<script src="skins/calm.js"></script>
+<script src="skins/cockpit.js"></script>
+<script src="skins/onair.js"></script>
+<script src="skins/aurora.js"></script>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
@@ -282,6 +324,10 @@ const params = new URLSearchParams(location.search);
 const N = 150;                        // секунд в ленте
 const C = {out:"#c6f432", in:"#7fd4ff", paper:"#ece9e2", dim:"#7a766f", faint:"#45423e", line:"#1d1d20",
            line2:"#2a2a2e", warm:"#ffb020", hot:"#ff4d1a", bg:"#0a0a0b"};
+const rgba = (hex, a) => `rgba(${[1,3,5].map(i => parseInt(hex.substr(i,2),16)).join(",")},${a})`;
+function loadSkin(){ const cs = getComputedStyle(document.documentElement);
+  ["num", "mono", "ui"].forEach(k => { const v = cs.getPropertyValue("--" + k).trim(); if (v) FONT[k] = v; });
+  Object.keys(C).forEach(k => { const v = cs.getPropertyValue("--"+k).trim(); if (/^#[0-9a-f]{6}$/i.test(v)) C[k] = v; }); }
 
 /* ----------------------------------------------------------- servers -- */
 const store = {
@@ -365,10 +411,10 @@ function setMeter(k, pct, val, unit, sub, temp, off){
 }
 
 /* ---------------------------------------------------------- odometer -- */
-let odoStr = "";
-function setOdo(n){
-  const el = $("odo");
+function setOdo(n){ setOdoEl($("odo"), n); }
+function setOdoEl(el, n){
   const s = fin(n) ? Math.round(n).toLocaleString("ru-RU").replace(/\s/g, " ") : "—";
+  const odoStr = el.dataset.s || "";
   if (s.length !== odoStr.length){
     el.innerHTML = [...s].map(ch => /\d/.test(ch)
       ? `<span class="d"><span>${[0,1,2,3,4,5,6,7,8,9].map(d => `<i>${d}</i>`).join("")}</span></span>`
@@ -376,7 +422,7 @@ function setOdo(n){
   }
   [...s].forEach((ch, i) => { const col = el.children[i]; if (/\d/.test(ch) && col.firstChild)
     col.firstChild.style.transform = `translateY(-${+ch}em)`; });
-  odoStr = s;
+  el.dataset.s = s;
 }
 
 /* -------------------------------------------------------------- core -- */
@@ -438,19 +484,21 @@ function drawWave(cv, t, compact){
   g.globalAlpha = 1;
   if (!compact){
     // GPU load as a thin trace through the tape
-    g.strokeStyle = "rgba(236,233,226,.28)"; g.lineWidth = s; g.beginPath();
+    g.strokeStyle = rgba(C.paper, .28); g.lineWidth = s; g.beginPath();
     for (let i = 0; i < N; i++){ const x = w - (N-1-i+frac)*step, y = mid - (hist.gpu[i]/100)*upH;
       i ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke();
     // keep the big numbers legible: fade the tape out under the readouts
-    const fl = g.createLinearGradient(0, 0, Math.min(w*0.45, 520*s), 0); fl.addColorStop(0, "rgba(10,10,11,.92)"); fl.addColorStop(0.55, "rgba(10,10,11,.7)"); fl.addColorStop(1, "rgba(10,10,11,0)");
+    const fl = g.createLinearGradient(0, 0, Math.min(w*0.45, 520*s), 0); fl.addColorStop(0, rgba(C.bg, .92)); fl.addColorStop(0.55, rgba(C.bg, .7)); fl.addColorStop(1, rgba(C.bg, 0));
     g.fillStyle = fl; g.fillRect(0, 0, Math.min(w*0.45, 520*s), h);
-    const gr = g.createLinearGradient(w - 60*s, 0, w, 0); gr.addColorStop(0, "rgba(10,10,11,0)"); gr.addColorStop(1, "rgba(198,244,50,.07)");
+    const gr = g.createLinearGradient(w - 60*s, 0, w, 0); gr.addColorStop(0, rgba(C.bg, 0)); gr.addColorStop(1, rgba(C.out, .07));
     g.fillStyle = gr; g.fillRect(w - 60*s, 0, 60*s, h);
     text($("scaleT"), Math.round(scaleDec)+" ток/с"); text($("scaleB"), Math.round(scalePre)+" ток/с");
   }
 }
 
 /* ---------------------------------------------------------------- demo -- */
+const SPEED = Math.max(1, +params.get("demo") || 1);   // ?demo=8 plays the demo 8x faster (for screenshots)
+const DEMO_ENGINE = params.get("engine") || "strata";   // ?engine=llamacpp | lmstudio shows how those engines look
 const demo = (() => {
   let req = null, today = {prompt:41250000, output:312116, requests:343}, all = {prompt:56660000, output:438901, requests:466}, recent = [], h = [];
   const t0 = Date.now()/1000;
@@ -459,14 +507,14 @@ const demo = (() => {
     if (!req && r() < 0.2) req = {phase:"reading", read:0, total:[1200,4400,34000,138000][Math.floor(r()*4)], gen:0, max:[256,512,1024][Math.floor(r()*3)], t:now};
     let state = "idle", tok = 0, pre = 0;
     if (req){
-      if (req.phase === "reading"){ pre = 600 + r()*90; req.read = Math.min(req.total, req.read + pre); state = "reading"; if (req.read >= req.total) req.phase = "gen"; }
-      else { tok = 55 + 10*Math.sin(now/3) + r()*6; req.gen = Math.min(req.max, req.gen + tok); state = "generating";
+      if (req.phase === "reading"){ pre = 600 + r()*90; req.read = Math.min(req.total, req.read + pre*SPEED); state = "reading"; if (req.read >= req.total) req.phase = "gen"; }
+      else { tok = 55 + 10*Math.sin(now/3) + r()*6; req.gen = Math.min(req.max, req.gen + tok*SPEED); state = "generating";
         if (req.gen >= req.max){ recent.unshift({tok_s: +tok.toFixed(1), prefill_tok_s: 640 + r()*40, out: Math.round(req.gen), prompt: req.total, duration_s: now - req.t});
           recent = recent.slice(0, 12); [today, all].forEach(b => { b.prompt += req.total; b.output += Math.round(req.gen); b.requests++; }); req = null; } }
     }
     h.push(tok); h = h.slice(-60);
     const busy = state !== "idle", last = recent[0] || {};
-    return {time: now, agent: {version: "demo", hostname: "gpu-server", os: "Linux", uptime_s: now - t0 + 260000},
+    const d = {time: now, agent: {version: "demo", hostname: "gpu-server", os: "Linux", uptime_s: now - t0 + 260000},
       gpu: {name: "NVIDIA GeForce RTX 3060", util: busy ? 92 + r()*7 : 3 + r()*4, mem_used_gib: 10.9, mem_total_gib: 12, temp: 48 + (busy ? 24 : 0) + r()*3,
             power_w: busy ? 150 + r()*18 : 18 + r()*4, power_limit_w: 170, count: 1},
       cpu: {name: "AMD Ryzen 7 5700G", percent: state === "reading" ? 38 + r()*20 : busy ? 12 + r()*8 : 2 + r()*3, temp_c: 46 + r()*8, ram_used_gib: 38.9, ram_total_gib: 64, ram_percent: 61, uptime_s: now - t0 + 260000},
@@ -476,6 +524,16 @@ const demo = (() => {
                queued: 0, recent, history: {tok_s: h}},
       comfyui: {up: true, version: "0.3.66", vram_free_gib: 1.1, running: r() < 0.3 ? 1 : 0, pending: [0,0,1,2][Math.floor(r()*4)]},
       tokens: {today: {...today, total: today.prompt + today.output}, all_time: {...all, total: all.prompt + all.output}}};
+    const sv = d.strata;
+    sv.kind = "strata"; sv.name = "Strata"; sv.speed = "live";
+    let eng = sv, chips = [{kind: "strata", name: "Strata", up: true, state: sv.state, model: sv.model}, {kind: "lmstudio", name: "LM Studio", up: true, state: "idle", model: "qwen2.5-7b-instruct"}];
+    if (DEMO_ENGINE === "llamacpp") eng = {up: true, kind: "llamacpp", name: "llama.cpp", model: "Qwen3-8B-Q4_K_M", context: 8192, state: busy ? "generating" : "idle", tok_s: null, speed: "avg",
+      decode_tok_s_avg: 52.3, prefill_tok_s_avg: 480, queued: 0, running: busy ? 1 : 0, recent: [], history: {tok_s: []}, note: "скорость: среднее по движку"};
+    if (DEMO_ENGINE === "lmstudio") eng = {up: true, kind: "lmstudio", name: "LM Studio", model: "qwen2.5-7b-instruct Q4_K_M", context: 4096, state: busy ? "generating" : "idle", tok_s: null, speed: "none",
+      queued: 0, running: 1, recent: [], history: {tok_s: []}, note: "этот движок не отдаёт скорость генерации"};
+    if (eng !== sv) chips = [{kind: eng.kind, name: eng.name, up: true, state: eng.state, model: eng.model}];
+    d.engine = eng; d.strata = eng === sv ? sv : {...eng, tok_s: 0}; d.engines = chips;
+    return d;
   };
 })();
 
@@ -507,7 +565,7 @@ function pushHist(d, p, g){
   hist.t = performance.now();
 }
 function ingest(d){
-  const s = d.strata || {}, g = d.gpu || {};
+  const s = d.engine || d.strata || {}, g = d.gpu || {};
   if (!seeded && s.up && s.history && s.history.tok_s){
     const a = s.history.tok_s.slice(-N); hist.dec.splice(N - a.length, a.length, ...a); seeded = true;
   }
@@ -516,7 +574,7 @@ function ingest(d){
 }
 
 /* ------------------------------------------------------------ render -- */
-const STATE_RU = {generating: "Генерация", reading: "Чтение промпта", idle: "Ожидание", unloaded: "Модель выгружена"};
+const STATE_RU = {generating: "Генерация", reading: "Чтение", idle: "Ожидание", unloaded: "Выгружена"};
 function render(){
   const s = cur();
   $("app").style.setProperty("--x", 0);
@@ -525,23 +583,23 @@ function render(){
     text($("where"), s.name + " · " + s.url);
     text($("mState"), failMsg); text($("mDec"), "—");
     document.title = "TokenPulse · " + failMsg.toLowerCase();
-    renderList(); return;
+    renderList(); skinUpdate(); return;
   }
-  const st = D.strata || {}, g = D.gpu || {}, c = D.cpu || {}, cf = D.comfyui || {}, tk = D.tokens || {}, a = D.agent || {};
+  const st = D.engine || D.strata || {}, g = D.gpu || {}, c = D.cpu || {}, cf = D.comfyui || {}, tk = D.tokens || {}, a = D.agent || {};
   let state = st.up ? (STATE_RU[st.state] || st.state) : (cf.up ? (cf.running ? "ComfyUI · рендер" : "ComfyUI · ожидание") : "Только железо");
   if (st.up && st.queued) state += " · очередь " + st.queued;
   text($("state"), state);
   $("state").style.color = st.state === "generating" ? C.out : st.state === "reading" ? C.in : C.paper;
   const model = st.up ? st.model : cf.up ? "ComfyUI " + (cf.version || "") : (g.name || "");
-  $("where").innerHTML = `<b>${esc(a.hostname || s.name)}</b> · ${esc(model || "—")}${st.context ? " · " + Math.round(st.context/1024) + "K контекст" : ""}`;
+  $("where").innerHTML = `<b>${esc(a.hostname || s.name)}</b> · ${esc((st.up && st.kind && st.kind !== "strata" ? st.name + " · " : "") + (model || "—"))}${st.context ? " · " + Math.round(st.context/1024) + "K контекст" : ""}`;
 
   // hero
   const gen = st.state === "generating", rd = st.state === "reading";
-  const dec = gen ? st.tok_s : (st.decode_tok_s_last || st.decode_tok_s_avg);
-  const pre = rd ? st.prefill_tok_s_mean : (st.prefill_tok_s_last || st.prefill_tok_s_avg);
+  const dec = gen ? (st.tok_s ?? st.decode_tok_s_avg) : (st.decode_tok_s_last || st.decode_tok_s_avg);
+  const pre = rd ? (st.prefill_tok_s_mean ?? st.prefill_tok_s_avg) : (st.prefill_tok_s_last || st.prefill_tok_s_avg);
   text($("dec"), st.up ? f1(dec) : "—"); text($("pre"), st.up ? f1(pre) : "—");
   $("roOut").classList.toggle("idle", !gen); $("roIn").classList.toggle("idle", !rd);
-  text($("decSub"), gen ? "ток/с сейчас" : "ток/с последний"); text($("preSub"), rd ? "ток/с сейчас" : "ток/с последний");
+  text($("decSub"), st.speed === "none" ? "этот движок не отдаёт скорость" : st.speed === "avg" ? "ток/с среднее" : gen ? "ток/с сейчас" : "ток/с последний"); text($("preSub"), rd ? "ток/с сейчас" : "ток/с последний");
   const job = $("job");
   if (rd && st.prompt_total){ job.style.width = (st.prompt_read/st.prompt_total*100) + "%"; job.style.background = C.in; }
   else if (gen && st.max_tokens){ job.style.width = (st.generated/st.max_tokens*100) + "%"; job.style.background = C.out; }
@@ -587,19 +645,20 @@ function render(){
   text($("fAgent"), (a.version || "—") + " · " + (a.os || "")); text($("fPing"), fin(ping) ? Math.round(ping) + " мс" : "—"); text($("fUp"), upt(a.uptime_s || c.uptime_s));
 
   // mini
-  text($("mDec"), st.up ? f1(gen ? st.tok_s : rd ? st.prefill_tok_s_mean : dec) : fin(g.util) ? Math.round(g.util) + "%" : "—");
+  text($("mDec"), st.up ? f1(rd ? pre : dec) : fin(g.util) ? Math.round(g.util) + "%" : "—");
   $("mDec").style.color = rd ? C.in : C.out; $("mDec").classList.toggle("idle", !gen && !rd);
-  text($("mState"), (st.up ? (gen ? "ток/с · генерация" : rd ? "ток/с · чтение" : "ток/с · ожидание") : state) + " · " + (a.hostname || s.name));
+  text($("mState"), st.up ? (gen ? "ток/с · генерация" : rd ? "ток/с · чтение" : "ток/с · ожидание") : state);
+  $("mini").title = (a.hostname || s.name) + " · двойной клик: развернуть";
   const tmax = Math.max(g.temp || 0, c.temp_c || 0);
   miniBar("Gpu", g.util, fin(g.util) ? Math.round(g.util) : "—");
   miniBar("Vr", vt ? vu/vt*100 : 0, vt ? Math.round(vu/vt*100) : "—");
   miniBar("T", tmax, tmax ? Math.round(tmax) + "°" : "—"); $("mTT").style.background = heat(tmax);
   const mt = $("mT"); mt.className = tmax >= 80 ? "hot" : tmax >= 68 ? "warm" : "";
 
-  document.title = st.up ? `${f1(gen ? st.tok_s : dec)} ток/с · GPU ${fin(g.util) ? Math.round(g.util) : "—"}% — ${a.hostname || s.name}`
+  document.title = st.up ? `${f1(dec)} ток/с · GPU ${fin(g.util) ? Math.round(g.util) : "—"}% — ${a.hostname || s.name}`
                          : `GPU ${fin(g.util) ? Math.round(g.util) : "—"}% · ${a.hostname || s.name}`;
   favicon(g.util, gen ? C.out : rd ? C.in : C.paper);
-  renderList();
+  renderList(); skinUpdate();
 }
 function miniBar(k, pct, v){ $("m"+k+"T").style.width = Math.max(0, Math.min(100, pct || 0)) + "%"; text($("m"+k), v); }
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
@@ -617,8 +676,10 @@ function favicon(u, col){
 /* ----------------------------------------------------------- animate -- */
 function frame(t){
   if (!document.body.classList.contains("is-mini")){
-    drawCore($("core"), t); drawWave($("wave"), t, false);
-    METERS.forEach(m => { const st = meterState[m.k]; st.shown += (st.v - st.shown)*0.12; drawComb(m.k); });
+    if (skin === "pulse"){
+      drawCore($("core"), t); drawWave($("wave"), t, false);
+      METERS.forEach(m => { const st = meterState[m.k]; st.shown += (st.v - st.shown)*0.12; drawComb(m.k); });
+    } else { const d = TP.skins[skin]; if (d && d.frame && d.mounted){ try { d.frame(t, lastVM, ctx); } catch (e) { fail(d, e); } } }
   }
   const pipOpen = pipWin && !pipWin.closed;
   if (document.body.classList.contains("is-mini") || pipOpen){ drawCore($("mcore"), t); drawWave($("mwave"), t, true); }
@@ -628,16 +689,20 @@ function frame(t){
 /* -------------------------------------------------------------- mini -- */
 let forcedMini = store.get("mini", false) || params.get("mini") != null;
 function applyMini(){
-  const auto = innerWidth <= 360 || innerHeight <= 170;
+  const auto = innerHeight <= 170;
   document.body.classList.toggle("is-mini", (forcedMini || auto) && !(pipWin && !pipWin.closed));
 }
 addEventListener("resize", applyMini);
-$("miniBtn").onclick = () => { forcedMini = true; store.set("mini", true); applyMini(); };
+let fullSize = null;   // the app window goes back to this size when expanded (ignored by a plain browser tab)
+function resizeApp(toMini){ try {
+  if (toMini){ fullSize = [outerWidth, outerHeight]; resizeTo(Math.min(outerWidth, 380), outerHeight - innerHeight + 104); }
+  else if (fullSize){ resizeTo(fullSize[0], fullSize[1]); fullSize = null; } } catch (e) {} }
+function goMini(){ forcedMini = true; store.set("mini", true); applyMini(); resizeApp(true); }
 $("mExp").onclick = expand;
 $("mini").ondblclick = expand;
 function expand(){
   if (pipWin && !pipWin.closed){ pipWin.close(); return; }
-  forcedMini = false; store.set("mini", false); applyMini();
+  forcedMini = false; store.set("mini", false); applyMini(); resizeApp(false);
 }
 
 let pipWin = null;
@@ -648,20 +713,22 @@ async function openPip(){
     return;
   }
   if (pipWin && !pipWin.closed){ pipWin.close(); return; }
-  pipWin = await documentPictureInPicture.requestWindow({width: 400, height: 96});
+  pipWin = await documentPictureInPicture.requestWindow({width: 364, height: 104});
   [...document.querySelectorAll("style, link[rel=stylesheet]")].forEach(n => pipWin.document.head.appendChild(n.cloneNode(true)));
-  pipWin.document.body.style.cssText = "margin:0;background:#0a0a0b";
+  pipWin.document.documentElement.dataset.skin = skin;
+  pipWin.document.body.style.cssText = "margin:0;background:" + C.bg;
   const m = $("mini"); m.classList.add("in-pip"); pipWin.document.body.appendChild(m);
   pipWin.addEventListener("pagehide", () => { m.classList.remove("in-pip"); document.body.appendChild(m); pipWin = null; applyMini(); });
   document.body.classList.remove("is-mini");
 }
-$("pipBtn").onclick = openPip;
 
 /* ------------------------------------------------------------ drawer -- */
 let drawerOpen = false;
 function openDrawer(on){ drawerOpen = on; $("drawer").classList.toggle("open", on); $("scrim").classList.toggle("open", on);
   if (on && failMsg === "Нужен токен" && !online){ $("fUrl").value = cur().url; $("fName").value = cur().name; $("fTok").focus(); } }
-$("srvBtn").onclick = () => openDrawer(!drawerOpen); $("fClose").onclick = $("scrim").onclick = () => openDrawer(false);
+document.addEventListener("click", e => { const b = e.target.closest("[data-act]"); if (!b) return;
+  ({pip: openPip, mini: goMini, srv: () => openDrawer(!drawerOpen)})[b.dataset.act](); });
+$("fClose").onclick = $("scrim").onclick = () => openDrawer(false);
 function renderList(){
   const html = servers.map((s, i) => `<div class="srv ${s.url === active ? (online ? "on" : "") : ""}">
     <span class="led"></span><div><div class="nm">${esc(s.name)}</div><div class="url">${esc(s.url === "demo" ? "встроенные тестовые данные" : s.url)}${s.token ? " · токен" : ""}</div></div>
@@ -690,13 +757,82 @@ function switchTo(url){
 addEventListener("keydown", e => {
   if (e.target.tagName === "INPUT") { if (e.key === "Enter") $("fAdd").click(); if (e.key === "Escape") openDrawer(false); return; }
   const k = e.key.toLowerCase();
-  if (k === "m" || k === "ь") document.body.classList.contains("is-mini") ? expand() : $("miniBtn").click();
+  if (k === "m" || k === "ь") document.body.classList.contains("is-mini") ? expand() : goMini();
   else if (k === "p" || k === "з") openPip();
   else if (k === "s" || k === "ы") openDrawer(!drawerOpen);
+  else if (k === "k" || k === "л") cycleSkin();
   else if (k === "escape") openDrawer(false);
 });
 
-applyMini(); render(); poll(); requestAnimationFrame(frame);
+/* ------------------------------------------------------------- skins -- */
+// view model: what every skin draws from. Built once per second from the agent's data.
+let lastVM = {off: true, label: "Подключение"};
+function buildVM(){
+  const sv = cur();
+  if (!online || !D) return {off: true, label: failMsg, host: sv.name, url: sv.url, engines: [], recent: [], today: {}, all: {}, gpu: {}, cpu: {}, ram: {}, comfy: {}, progress: {}};
+  const st = D.engine || D.strata || {}, g = D.gpu || {}, c = D.cpu || {}, cf = D.comfyui || {}, tk = D.tokens || {}, a = D.agent || {};
+  const gen = !!(st.up && st.state === "generating"), rd = !!(st.up && st.state === "reading");
+  const state = st.up ? (st.state || "idle") : (cf.up && cf.running ? "generating" : "idle");
+  const vt = fin(g.mem_total_gib) ? g.mem_total_gib : (g.mem_total_mib || 0)/1024, vu = fin(g.mem_used_gib) ? g.mem_used_gib : (g.mem_used_mib || 0)/1024;
+  const dec = gen ? (st.tok_s ?? st.decode_tok_s_avg) : (st.decode_tok_s_last || st.decode_tok_s_avg);
+  const pre = rd ? (st.prefill_tok_s_mean ?? st.prefill_tok_s_avg) : (st.prefill_tok_s_last || st.prefill_tok_s_avg);
+  return {off: false, host: a.hostname || sv.name, url: sv.url, engine: st.name || "Strata", kind: st.kind || "strata", engineUp: !!st.up,
+    model: st.up ? st.model : null, ctx: st.context, state, gen, rd, queued: st.queued || 0, running: st.running || 0,
+    dec: fin(dec) ? dec : null, pre: fin(pre) ? pre : null, live: gen && fin(st.tok_s) ? st.tok_s : null,
+    speed: st.speed || "live", note: st.note || null,
+    progress: {read: st.prompt_read, total: st.prompt_total, gen: st.generated, max: st.max_tokens},
+    gpu: {has: !!(g.count || fin(g.util)), name: g.name, util: g.util, vu, vt, vpct: vt ? vu/vt*100 : null, temp: g.temp, tempMem: g.temp_mem, power: g.power_w, powerLimit: g.power_limit_w},
+    cpu: {pct: c.percent, temp: c.temp_c, name: c.name},
+    ram: {used: c.ram_used_gib, total: c.ram_total_gib, pct: c.ram_total_gib ? c.ram_used_gib/c.ram_total_gib*100 : c.ram_percent},
+    today: tk.today || {}, all: tk.all_time || {}, recent: st.recent || [], comfy: cf, engines: D.engines || [],
+    ping, uptime: a.uptime_s || c.uptime_s, agent: a, tempMax: Math.max(g.temp || 0, c.temp_c || 0) || null};
+}
+const ruCount = (n, one, few, many) => { n = Math.abs(n) % 100; const k = n % 10; return n > 10 && n < 20 ? many : k > 1 && k < 5 ? few : k === 1 ? one : many; };
+const FONT = {num: "sans-serif", mono: "monospace", ui: "sans-serif"};
+const ctx = {C, FONT, hist, N, fin, f1, mtok, upt, esc, rgba, mix, heat, fit, text, ruCount, odometer: setOdoEl, get skin(){ return skin; }};
+function fail(d, e){ if (!d.failed){ d.failed = true; console.error("skin " + d.id + ":", e); } }
+function skinUpdate(){
+  lastVM = buildVM();
+  const d = TP.skins[skin];
+  if (d && d.update && d.mounted){ try { d.update(lastVM, ctx); } catch (e) { fail(d, e); } }
+}
+const PULSE = {id: "pulse", name: "Пульс", who: "Энтузиастам", swatch: ["#0a0a0b", "#c6f432", "#7fd4ff", "#ece9e2"]};
+const skinList = () => [PULSE, ...TP.list];
+function mountSkins(){
+  const host = $("skinHost");
+  TP.list.forEach(d => {
+    try {
+      const css = (d.theme ? `:root[data-skin="${d.id}"]{${Object.keys(d.theme).map(k => k + ":" + d.theme[k]).join(";")}}\n` : "") + (d.css || "");
+      if (css){ const st = document.createElement("style"); st.dataset.skin = d.id; st.textContent = css; document.head.appendChild(st); }
+      (d.fonts || []).forEach(u => { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = u; document.head.appendChild(l); });
+      const root = document.createElement("main"); root.className = "skin"; root.id = "sk-" + d.id; root.innerHTML = d.html || "";
+      host.appendChild(root); d.root = root;
+      if (d.mount) d.mount(root, ctx);
+      d.mounted = true;
+    } catch (e) { fail(d, e); }
+  });
+}
+let skin = params.get("skin") || store.get("skin", "pulse");
+if (!skinList().some(x => x.id === skin)) skin = "pulse";
+function renderSkins(){
+  $("skins").innerHTML = skinList().map(x => { const w = x.swatch || ["#111", "#ccc", "#888", "#eee"];
+    return `<button class="sk ${x.id === skin ? "on" : ""}" data-skin="${x.id}" style="background:${w[0]};color:${w[3]}"><i style="background:${w[1]};width:70%"></i><i style="background:${w[2]};width:40%"></i><span>${esc(x.name)}</span><small>${esc(x.who || "")}</small></button>`; }).join("");
+}
+function applySkin(name){
+  skin = name; store.set("skin", name);
+  document.documentElement.dataset.skin = name;
+  TP.list.forEach(d => d.root && d.root.classList.toggle("on", d.id === name));
+  document.body.classList.toggle("bgnone", params.get("bg") === "none");
+  if (pipWin && !pipWin.closed) pipWin.document.documentElement.dataset.skin = name;
+  loadSkin(); favAt = 0; renderSkins();
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = C.bg;
+  skinUpdate();
+}
+function cycleSkin(){ const l = skinList(); applySkin(l[(l.findIndex(x => x.id === skin) + 1) % l.length].id); }
+$("skins").onclick = e => { const b = e.target.closest("[data-skin]"); if (b) applySkin(b.dataset.skin); };
+
+mountSkins();
+applySkin(skin); applyMini(); render(); poll(); requestAnimationFrame(frame);
 </script>
 </body>
 </html>
