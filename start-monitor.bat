@@ -27,3 +27,4 @@ if not defined BROWSER (
   exit /b 0
 )
 start "" "%BROWSER%" --app="%URL%" --window-size=%SIZE% --user-data-dir="%PROFILE%" --no-first-run
+if not defined TP_FRAMELESS where python >nul 2>nul && start "" /b python "%~dp0frameless.py" --keep-frame

@@ -5,6 +5,8 @@ Run it after the monitor window is open (start-monitor-frameless.bat does that).
 Afterwards the window can be dragged by its top 40 px (leave the right 120 px: the
 corner buttons live there). Close it with Alt+F4 or from the taskbar.
 Run `python frameless.py --restore` to give the frame back.
+`--keep-frame` leaves the frame alone and only keeps the window on top while it is
+the compact strip (start-monitor.bat starts it this way).
 """
 import ctypes, sys, time
 from ctypes import wintypes as W
@@ -19,6 +21,8 @@ SWP = 0x0001 | 0x0002 | 0x0004 | 0x0020  # NOSIZE NOMOVE NOZORDER FRAMECHANGED
 u.GetWindowLongW.restype = ctypes.c_long
 u.GetAsyncKeyState.restype = ctypes.c_short
 restore = "--restore" in sys.argv
+keep = "--keep-frame" in sys.argv
+HWND_TOPMOST, HWND_NOTOPMOST = -1, -2
 
 
 def find():
@@ -54,11 +58,13 @@ for _ in range(40):
     time.sleep(0.5)
 if not hs:
     sys.exit("monitor window not found: start the monitor first")
-for h in hs:
-    strip(h)
-print(("frame restored" if restore else "frame removed") + f" on {len(hs)} window(s)")
-if restore:
-    sys.exit(0)
+if not keep:
+    for h in hs:
+        strip(h)
+    print(("frame restored" if restore else "frame removed") + f" on {len(hs)} window(s)")
+    if restore:
+        sys.exit(0)
+top = None
 
 # drag by the top strip, as long as the window exists
 pt, rc = W.POINT(), W.RECT()
@@ -66,6 +72,13 @@ drag = None
 while u.IsWindow(hs[0]):
     down = u.GetAsyncKeyState(0x01) & 0x8000
     u.GetCursorPos(ctypes.byref(pt)); u.GetWindowRect(hs[0], ctypes.byref(rc))
+    small = rc.bottom - rc.top <= 220           # the compact strip floats above other windows
+    if small != top:
+        top = small
+        u.SetWindowPos(hs[0], HWND_TOPMOST if small else HWND_NOTOPMOST, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010)
+    if keep:
+        time.sleep(0.05)
+        continue
     if down and drag is None:
         if rc.left <= pt.x < rc.right - 120 and rc.top <= pt.y < rc.top + 40:
             drag = (pt.x - rc.left, pt.y - rc.top, pt.x, pt.y, False)
