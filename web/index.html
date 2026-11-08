@@ -698,7 +698,11 @@ let fullSize = null;   // the app window goes back to this size when expanded (i
 function resizeApp(toMini){ try {
   if (toMini){ fullSize = [outerWidth, outerHeight]; resizeTo(Math.min(outerWidth, 380), outerHeight - innerHeight + 104); }
   else if (fullSize){ resizeTo(fullSize[0], fullSize[1]); fullSize = null; } } catch (e) {} }
-function goMini(){ forcedMini = true; store.set("mini", true); applyMini(); resizeApp(true); }
+function goMini(){
+  forcedMini = true; store.set("mini", true); applyMini(); resizeApp(true);
+  // some browsers ignore resizeTo for an app window: then use the small always-on-top window instead
+  setTimeout(() => { if (innerHeight > 200 && forcedMini && !(pipWin && !pipWin.closed) && "documentPictureInPicture" in window) openPip().catch(() => {}); }, 400);
+}
 $("mExp").onclick = expand;
 $("mini").ondblclick = expand;
 function expand(){
