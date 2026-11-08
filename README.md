@@ -262,6 +262,11 @@ Windows: `start-widget.bat --server http://192.168.31.30:8787`
 
 ## Windows
 
+**Готовые exe без Python.** На странице [Releases](https://github.com/ildargiv/tokenpulse/releases) лежит
+`TokenPulse-windows.zip`: `TokenPulse-Agent.exe` (сервер), `TokenPulse-Widget.exe` (виджет) и `start-monitor.bat`.
+Собирается GitHub Actions (`.github/workflows/windows-exe.yml`) при пуше тега `v*`; вручную — кнопкой Run workflow.
+
+
 - `start-agent.bat` — агент в окне консоли, `start-widget.bat` — виджет без окна
 - Температура видеокарты берётся из `nvidia-smi` (он ставится с драйвером NVIDIA)
 - Температуры процессора Windows не отдаёт просто так. Варианты:
