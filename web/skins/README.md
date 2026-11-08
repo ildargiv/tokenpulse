@@ -16,7 +16,7 @@ different audience.
 | `calm` | Спокойный | everyone else: plain words, no jargon, one glance |
 | `cockpit` | Приборы | gamers and overclockers: analog dials and warning lamps |
 | `onair` | Эфир | streamers: a lower-third bar for OBS, transparent background possible |
-| `aurora` | см. файл | the showpiece |
+| `aurora` | Эбру | the showpiece: ink drops on marbling water, one drop per 16 tokens |
 
 ## Contract
 
@@ -45,8 +45,9 @@ skin's theme also themes those.
 
 `root` is the skin's own `<main>`; it is a block element that fills the window width and grows
 with its content. Make it at least `min-height:100vh` if the skin owns the background.
-The page draws 28 px buttons in the top-right corner (compact, window-on-top, servers) on every
-skin except the first one: leave about 40 px of free space there.
+The page floats a 36 px row with three small buttons (compact, window-on-top, servers) over the top
+of every skin except the first one: your root element has a 36 px transparent top border, your background
+paints under the buttons, and your own padding starts below them. Use `min-height:100vh` if your skin fills the window.
 
 ## View model (`vm`)
 
@@ -95,7 +96,10 @@ scrolling), `ctx.fit(canvas)` sizes a canvas to its CSS box at the device pixel 
 * Russian interface text. Concise: the whole state readable in a glance, details after.
 * Keep it light: canvases sized by `ctx.fit`, no per-frame DOM writes, no allocations in `frame()`
   that you can avoid. Do not use `localStorage`, network requests or `eval`.
-* Never touch anything outside your own `<main>`; do not edit `index.html`.
+* Never touch anything outside your own `<main>`; do not edit `index.html`. Scope every CSS selector with
+  `#sk-<id>` **and prefix your class names with the skin id** (`.cm-title`, not `.title`): the page's own
+  stylesheet uses short generic names (`.foot`, `.top`, `.card`, `.m`, `.big` ...) that would otherwise
+  leak into your markup.
 
 ## Trying it
 

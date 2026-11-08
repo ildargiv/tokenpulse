@@ -25,12 +25,13 @@
 /* ---- skins are plug-ins (web/skins/*.js, see web/skins/README.md): each brings its own theme, layout and canvas code */
 .skin{display:none}
 .skin.on{display:block}
+#skinHost .skin{margin-top:-36px;border-top:36px solid transparent}   /* the 36 px button row floats over a transparent top border: the skin background paints under it */
 :root[data-skin]:not([data-skin="pulse"]) #app{display:none}
 body.is-mini .skin{display:none!important}
-.dock{position:fixed;top:8px;right:8px;z-index:30;display:flex;gap:4px;opacity:.45;transition:opacity .2s}
+.dock{position:relative;z-index:5;display:flex;justify-content:flex-end;gap:4px;padding:8px 8px 0;height:36px;opacity:.5;transition:opacity .2s}
 .dock:hover{opacity:1}
 :root[data-skin="pulse"] .dock,body.is-mini .dock{display:none}
-.dock .tool{width:28px;height:28px;background:color-mix(in srgb,var(--bg) 72%,transparent);backdrop-filter:blur(6px)}
+.dock .tool{width:28px;height:28px}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{background:var(--bg);color:var(--paper);font:13px/1.35 var(--mono);overflow-x:hidden;
@@ -278,12 +279,12 @@ body.is-mini{overflow:hidden}
   </footer>
 </main>
 
-<div id="skinHost"></div>
 <div class="dock" id="dock">
   <button class="tool" data-act="pip" title="Мини-окно поверх всех окон (P)"><svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11"/><rect x="8" y="8" width="5" height="4" fill="currentColor" stroke="none"/></svg></button>
   <button class="tool" data-act="mini" title="Компактный режим (M)"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button>
   <button class="tool" data-act="srv" title="Серверы и оформление (S)"><svg viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="4.5"/><rect x="2" y="9" width="12" height="4.5"/><path d="M4.5 4.75h1M4.5 11.25h1"/></svg></button>
 </div>
+<div id="skinHost"></div>
 
 <div class="mini" id="mini" title="Двойной клик: развернуть">
   <canvas class="mwave" id="mwave"></canvas>
