@@ -73,6 +73,8 @@ start-monitor.bat http://192.168.31.30:8787 full cockpit
 <img src="assets/skin-onair.png" width="170">
 <img src="assets/skin-aurora-narrow.png" width="170">
 
+**Без рамки.** `start-monitor-frameless.bat` (те же аргументы) открывает монитор и убирает заголовок и границу окна через `frameless.py` (только Windows, нужен Python). Окно двигается за верхнюю полосу 40 px, закрывается по Alt+F4; вернуть рамку: `python frameless.py --restore`.
+
 ## Какие движки понимает
 
 Агент сам находит движок на привычных портах сервера (Strata и llama.cpp 8080, LM Studio 1234,
