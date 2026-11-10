@@ -133,6 +133,7 @@ Windows; на Linux — пакет `python3-tk`).
 | `start-monitor.bat` / `start-monitor.sh` | Монитор отдельным окном (Edge/Chrome), `mini` сразу открывает компактную полоску. |
 | `start-agent.sh` / `start-agent.bat` | Запуск агента (Linux / Windows). |
 | `start-widget.sh` / `start-widget.bat` | Запуск виджета (Linux / Windows). |
+| `widget_web.py` / `start-widget-web.sh` | Linux-виджет без tkinter: та же веб-страница со скинами в окне без рамки (GTK + WebKit2). |
 
 ---
 
@@ -290,6 +291,27 @@ export TK_LIBRARY=$HOME/.local/opt/tk/usr/share/tcltk/tk8.6
 ```
 
 Если есть root-доступ, достаточно `sudo apt install python3-tk`.
+
+## Виджет на Linux со скинами (без tkinter)
+
+`widget.py` рисует кольца сам — у него один фиксированный вид. `widget_web.py` открывает
+**ту же веб-страницу, что и монитор**, в отдельном окне без рамки и поверх остальных окон:
+все скины, компактный режим и подписи работают как в браузере. Это ответ на
+`start-monitor.bat` + `frameless.py` из Windows.
+
+```bash
+sudo apt install python3-gi gir1.2-webkit2-4.0     # один раз
+
+./start-widget-web.sh                              # этот компьютер
+./start-widget-web.sh http://192.168.31.30:8787    # агент на другом компьютере
+./start-widget-web.sh --skin cockpit               # пульс, консоль, спокойный, приборы, эфир, збру
+./start-widget-web.sh --mini                       # сразу компактная полоска
+./start-widget-web.sh --no-top --size 520x900      # не держать поверх окон, свой размер
+```
+
+Управление: тянуть за полоску `⠿ TokenPulse` сверху, правый клик по ней сворачивает окно
+в полосу и обратно, `×` или `Esc` закрывают. Локальный агент виджет запускает сам
+(`--no-agent` отключает это).
 
 ## Лицензия
 
