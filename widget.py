@@ -1016,7 +1016,13 @@ class TokenPulse:
             return
         if host not in ("127.0.0.1", "localhost", "::1"):
             return
-        agent = Path(__file__).with_name("agent.py")
+        if getattr(sys, "frozen", False):
+            # packaged build: TokenPulse-Agent.exe lies next to TokenPulse-Widget.exe
+            agent = Path(sys.executable).with_name("TokenPulse-Agent.exe")
+            cmd = [str(agent)]
+        else:
+            agent = Path(__file__).with_name("agent.py")
+            cmd = [sys.executable, str(agent)]
         if not agent.exists():
             return
         try:
@@ -1025,7 +1031,7 @@ class TokenPulse:
                 kwargs["creationflags"] = 0x08000000
             else:
                 kwargs["start_new_session"] = True
-            subprocess.Popen([sys.executable, str(agent)], cwd=str(agent.parent),
+            subprocess.Popen(cmd, cwd=str(agent.parent),
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                              **kwargs)
         except Exception:
