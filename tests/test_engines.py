@@ -9,6 +9,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import agent  # noqa: E402
 import engines  # noqa: E402
 
 LLAMA_METRICS = """# HELP llamacpp:prompt_tokens_total Number of prompt tokens processed.
@@ -30,6 +31,21 @@ vllm:prompt_tokens_total{model_name="Qwen/Qwen2.5-7B-Instruct"} %(p)d
 vllm:generation_tokens_total{model_name="Qwen/Qwen2.5-7B-Instruct"} %(g)d
 """
 STATE = {"vllm_p": 1000, "vllm_g": 5000}
+
+# Strata answers /metrics in two formats and chooses by the Accept header.
+STRATA_JSON = {"engine": {"model": "qwen3-8b-iq3", "context": 262144, "version": "0.1.59", "kv": "int8"},
+               "live": {"state": "generating", "queued": 0, "tok_s": 52.4, "tok_s_mean": 50.1,
+                        "prompt_read": 900, "prompt_total": 1200, "generated": 31, "elapsed_s": 0.6},
+               "requests": [{"id": "r1", "time": 1.0, "prompt_tokens": 1200, "reused": 300,
+                             "output_tokens": 40, "decode_tok_s": 51.0, "prompt_ms": 400.0,
+                             "duration_s": 1.2, "finish": "stop"}],
+               "totals": {"requests": 3, "prompt_tokens": 4000, "reused": 1000, "output_tokens": 200,
+                          "prompt_ms": 1500.0, "decode_ms": 4000.0},
+               "history": {"tok_s": [50.0, 52.0]}}
+STRATA_PROM = """# HELP vllm:num_requests_running Requests reading their prompt or generating.
+# TYPE vllm:num_requests_running gauge
+vllm:num_requests_running 1.0
+"""
 
 
 def routes(kind):
@@ -80,6 +96,33 @@ def serve(kind):
     return srv, "http://127.0.0.1:%d" % srv.server_address[1]
 
 
+def serve_strata():
+    """Fake Strata: JSON for a JSON-only client, Prometheus text when text/plain is fine."""
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path.split("?")[0] != "/metrics":
+                self.send_response(404)
+                self.end_headers()
+                return
+            accept = self.headers.get("Accept", "")
+            if "text/plain" in accept:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(STRATA_PROM.encode())
+            else:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(STRATA_JSON).encode())
+
+        def log_message(self, *a):
+            pass
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, "http://127.0.0.1:%d" % srv.server_address[1]
+
+
 class EngineTests(unittest.TestCase):
     def check(self, kind):
         srv, base = serve(kind)
@@ -91,6 +134,15 @@ class EngineTests(unittest.TestCase):
         p = engines.parse_prom(VLLM_METRICS % {"p": 1, "g": 2})
         self.assertEqual(engines.psum(p, "vllm:num_requests_running"), 2.0)
         self.assertEqual(p["vllm:prompt_tokens_total"][0][0]["model_name"], "Qwen/Qwen2.5-7B-Instruct")
+
+    def test_strata_metrics_negotiation(self):
+        srv, base = serve_strata()
+        self.addCleanup(srv.shutdown)
+        self.assertEqual(engines.detect(base), "strata")
+        r = agent.collect_strata(base)
+        self.assertTrue(r["up"])
+        self.assertEqual((r["model"], r["state"], r["tok_s"]), ("qwen3-8b-iq3", "generating", 52.4))
+        self.assertEqual(r["engine_totals"]["output_tokens"], 200)
 
     def test_llamacpp(self):
         r = self.check("llamacpp").sample()

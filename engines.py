@@ -46,10 +46,9 @@ GPU_BUSY = 35.0     # % GPU load that counts as "working" for engines without ac
 # http + prometheus text
 # --------------------------------------------------------------------------- #
 
-def http_text(url, timeout=1.5):
+def http_text(url, timeout=1.5, accept="application/json, text/plain, */*"):
     try:
-        req = Request(url, headers={"User-Agent": "tokenpulse-agent",
-                                    "Accept": "application/json, text/plain, */*"})
+        req = Request(url, headers={"User-Agent": "tokenpulse-agent", "Accept": accept})
         with urlopen(req, timeout=timeout) as r:
             return r.read(4 * 1024 * 1024).decode("utf-8", "replace")
     except Exception:
@@ -57,7 +56,9 @@ def http_text(url, timeout=1.5):
 
 
 def http_json(url, timeout=1.5):
-    text = http_text(url, timeout)
+    # Ask for JSON only. Strata 0.1.59 answers /metrics both ways and picks the Prometheus
+    # branch as soon as text/plain is acceptable, which used to make every JSON probe fail.
+    text = http_text(url, timeout, "application/json")
     if text is None:
         return None
     try:
