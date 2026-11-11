@@ -1,0 +1,120 @@
+name: Build (Windows + Linux)
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+          - os: ubuntu-22.04
+            target: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tk for the widget (Linux)
+        if: matrix.target == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y tk-dev python3-tk
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Build (Windows)
+        if: matrix.target == 'windows'
+        run: |
+          pyinstaller --noconfirm --onefile --console --name TokenPulse-Agent --add-data "web;web" agent.py
+          pyinstaller --noconfirm --onefile --windowed --name TokenPulse-Widget widget.py
+
+      - name: Build (Linux)
+        if: matrix.target == 'linux'
+        run: |
+          pyinstaller --noconfirm --onefile --console --name TokenPulse-Agent --add-data "web:web" agent.py
+          pyinstaller --noconfirm --onefile --windowed --name TokenPulse-Widget widget.py
+
+      - name: Smoke test agent
+        shell: bash
+        run: |
+          ./dist/TokenPulse-Agent --port 8799 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8799/api/health && break; sleep 1; done
+          curl -sf http://127.0.0.1:8799/api/health
+          curl -sf http://127.0.0.1:8799/ | grep -q "TOKENPULSE\|TokenPulse"
+          kill %1 || true
+
+      - name: Package (Windows)
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          $out = "TokenPulse-windows"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item dist\TokenPulse-Agent.exe, dist\TokenPulse-Widget.exe, start-monitor.bat, start-monitor-frameless.bat, frameless.py, README.md, LICENSE $out
+          @"
+          TokenPulse для Windows. Python ставить не нужно.
+
+          TokenPulse-Agent.exe  - запускается на ПК с видеокартой (сервер), отдаёт метрики на http://IP:8787/
+                                  Аргументы как у agent.py, например: TokenPulse-Agent.exe --engine http://127.0.0.1:1234
+          TokenPulse-Widget.exe - виджет на любом компьютере: TokenPulse-Widget.exe --server http://192.168.31.30:8787
+                                  Адрес запоминается, дальше достаточно двойного щелчка.
+          start-monitor.bat     - веб-монитор со скинами отдельным окном Edge/Chrome: start-monitor.bat http://IP:8787
+
+          Демо-режим выключен. Посмотреть дизайн без сервера: TokenPulse-Agent.exe --demo, затем http://127.0.0.1:8787/
+          Если Windows SmartScreen предупреждает о неизвестном издателе: "Подробнее" -> "Выполнить в любом случае".
+          "@ | Out-File -Encoding utf8 "$out\README-Windows.txt"
+          Compress-Archive -Path "$out\*" -DestinationPath "$out.zip" -Force
+
+      - name: Package (Linux)
+        if: matrix.target == 'linux'
+        run: |
+          out=TokenPulse-linux-x64
+          mkdir -p $out
+          cp dist/TokenPulse-Agent dist/TokenPulse-Widget start-monitor.sh start-widget-web.sh widget_web.py README.md LICENSE $out/
+          cat > $out/README-Linux.txt <<'TXT'
+          TokenPulse для Linux (x86-64). Python ставить не нужно.
+
+          ./TokenPulse-Agent    - на компьютере с видеокартой (сервер), метрики на http://IP:8787/
+                                  Аргументы как у agent.py: ./TokenPulse-Agent --engine http://127.0.0.1:1234
+          ./TokenPulse-Widget   - виджет: ./TokenPulse-Widget --server http://192.168.31.30:8787
+          ./start-monitor.sh    - веб-монитор со скинами отдельным окном Chromium/Chrome: ./start-monitor.sh http://IP:8787
+          ./start-widget-web.sh - монитор со скинами в окне без рамки (нужны python3-gi и gir1.2-webkit2-4.0)
+
+          Демо-режим выключен. Посмотреть дизайн без сервера: ./TokenPulse-Agent --demo, затем http://127.0.0.1:8787/
+          Агент как служба systemd: см. раздел «Автозапуск на Linux» в README.md.
+          TXT
+          sed -i 's/^          //' $out/README-Linux.txt
+          chmod +x $out/TokenPulse-Agent $out/TokenPulse-Widget $out/*.sh
+          tar -czf $out.tar.gz $out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TokenPulse-${{ matrix.target }}
+          path: |
+            TokenPulse-windows.zip
+            TokenPulse-linux-x64.tar.gz
+          if-no-files-found: error
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            TokenPulse-windows.zip
+            TokenPulse-linux-x64.tar.gz
+            dist/TokenPulse-Agent.exe
+            dist/TokenPulse-Widget.exe

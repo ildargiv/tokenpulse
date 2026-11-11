@@ -3,7 +3,7 @@
 #   ./start-monitor.sh                              this computer, http://127.0.0.1:8787
 #   ./start-monitor.sh http://192.168.31.30:8787    a server on the network
 #   ./start-monitor.sh http://192.168.31.30:8787 mini   compact strip from the start
-#   ./start-monitor.sh http://192.168.31.30:8787 full crt    skin: pulse, crt, paper, neon, mono
+#   ./start-monitor.sh http://192.168.31.30:8787 full cockpit    skin: pulse, console, calm, cockpit, onair, aurora
 SERVER="${1:-http://127.0.0.1:8787}"
 case "$SERVER" in http*) ;; *) SERVER="http://$SERVER" ;; esac
 SKIN="${3:+skin=$3}"; URL="$SERVER/?$SKIN"; SIZE="380,850"
