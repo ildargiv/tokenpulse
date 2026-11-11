@@ -309,6 +309,7 @@ body.is-mini{overflow:hidden}
   <div style="display:flex;gap:6px"><button class="btn pri" id="fAdd">Добавить и подключить</button><button class="btn" id="fClose">Закрыть</button></div>
   <div class="err" id="fErr"></div>
   <p class="hint">На сервере запустите <kbd>agent.py</kbd>. Адрес вида <kbd>http://IP:8787</kbd>.
+    Демо-режим выключен; чтобы посмотреть дизайн без сервера, введите адрес <kbd>demo</kbd>.
     Оформление меняется клавишей <kbd>K</kbd> или здесь. Мини-окно поверх всех окон работает в Chrome и Edge (кнопка <kbd>▣</kbd> или клавиша <kbd>P</kbd>).
     Если сузить окно, монитор сам переходит в компактный вид. Пока окно свёрнуто, скорость и загрузка видны в заголовке и на иконке.</p>
 </aside>
@@ -335,17 +336,25 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem("tp2."+k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem("tp2."+k, JSON.stringify(v)); }catch(e){} }
 };
+/* Демо-режим по умолчанию выключен: тестовые данные показываются только по ?demo
+   или если вручную добавить сервер с адресом "demo". Старую автозапись «Демо-данные» убираем. */
+const DEMO_SRV = {name: "Демо-данные", url: "demo", token: ""};
+const LOCAL_SRV = {name: "Этот компьютер", url: "http://127.0.0.1:8787", token: ""};
+const wantDemo = params.get("demo") != null;
 let servers = store.get("servers", []);
+if (!store.get("demoOptIn", false)) servers = servers.filter(s => !(s.url === "demo" && s.name === DEMO_SRV.name));
+if (!wantDemo && store.get("active") === "demo" && !servers.some(s => s.url === "demo")) store.set("active", null);
 const here = /^https?:$/.test(location.protocol) ? location.origin : null;
 if (here && !servers.some(s => s.url === here)) servers.unshift({name: "Этот сервер", url: here, token: ""});
-if (!servers.some(s => s.url === "demo")) servers.push({name: "Демо-данные", url: "demo", token: ""});
+if (wantDemo && !servers.some(s => s.url === "demo")) servers.push({...DEMO_SRV});
+if (!servers.length) servers.push({...LOCAL_SRV});
 if (params.get("server")) {
   const u = params.get("server").replace(/\/+$/, "");
   if (!servers.some(s => s.url === u)) servers.unshift({name: u.replace(/^https?:\/\//, ""), url: u, token: ""});
   store.set("active", u);
 }
 if (params.get("token")) { const s = servers.find(s => s.url === (store.get("active") || here)); if (s) s.token = params.get("token"); }
-if (params.get("demo") != null) store.set("active", "demo");
+if (wantDemo) store.set("active", "demo");
 store.set("servers", servers);
 let active = store.get("active", null);
 if (!servers.some(s => s.url === active)) active = servers[0].url;
@@ -743,7 +752,7 @@ function renderList(){
 $("srvList").onclick = e => {
   const u = e.target.dataset.use, d = e.target.dataset.del;
   if (u != null) switchTo(servers[+u].url);
-  if (d != null){ const s = servers[+d]; servers.splice(+d, 1); if (!servers.length) servers.push({name: "Демо-данные", url: "demo", token: ""});
+  if (d != null){ const s = servers[+d]; servers.splice(+d, 1); if (!servers.length) servers.push({...LOCAL_SRV});
     store.set("servers", servers); if (s.url === active) switchTo(servers[0].url); else renderList(); }
 };
 $("fAdd").onclick = () => {
@@ -751,6 +760,7 @@ $("fAdd").onclick = () => {
   if (!url){ text($("fErr"), "Укажите адрес агента"); return; }
   if (url !== "demo" && !/^https?:\/\//.test(url)) url = "http://" + url;
   if (url !== "demo" && !/:\d+$/.test(url.replace(/^https?:\/\//, ""))) url += ":8787";
+  if (url === "demo") store.set("demoOptIn", true);
   const ex = servers.find(s => s.url === url);
   if (ex){ if (name) ex.name = name; ex.token = token; } else servers.push({name: name || url.replace(/^https?:\/\//, ""), url, token});
   store.set("servers", servers); text($("fErr"), ""); $("fUrl").value = $("fName").value = $("fTok").value = ""; switchTo(url); openDrawer(false);

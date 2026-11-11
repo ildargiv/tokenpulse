@@ -1017,8 +1017,8 @@ class TokenPulse:
         if host not in ("127.0.0.1", "localhost", "::1"):
             return
         if getattr(sys, "frozen", False):
-            # packaged build: TokenPulse-Agent.exe lies next to TokenPulse-Widget.exe
-            agent = Path(sys.executable).with_name("TokenPulse-Agent.exe")
+            # packaged build: TokenPulse-Agent(.exe) lies next to TokenPulse-Widget(.exe)
+            agent = Path(sys.executable).with_name("TokenPulse-Agent" + (".exe" if WINDOWS else ""))
             cmd = [str(agent)]
         else:
             agent = Path(__file__).with_name("agent.py")

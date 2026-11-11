@@ -3,7 +3,7 @@ rem TokenPulse: monitor in its own app window (Microsoft Edge or Chrome, no tabs
 rem   start-monitor.bat                               this computer, http://127.0.0.1:8787
 rem   start-monitor.bat http://192.168.31.30:8787     a server on the network
 rem   start-monitor.bat http://192.168.31.30:8787 mini   compact strip from the start
-rem   start-monitor.bat http://192.168.31.30:8787 full crt    skin: pulse, crt, paper, neon, mono
+rem   start-monitor.bat http://192.168.31.30:8787 full cockpit    skin: pulse, console, calm, cockpit, onair, aurora
 chcp 65001 >nul
 set "SERVER=%~1"
 if "%SERVER%"=="" set "SERVER=http://127.0.0.1:8787"

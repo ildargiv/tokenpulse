@@ -93,9 +93,13 @@ def start_local_agent(server):
     if agent_alive(server):
         return
     agent = HERE / "agent.py"
+    cmd = [sys.executable, str(agent)]
+    if not agent.exists():
+        agent = HERE / "TokenPulse-Agent"     # release archive: packaged agent next to this file
+        cmd = [str(agent)]
     if not agent.exists():
         return
-    subprocess.Popen([sys.executable, str(agent), "--port", str(agent_port(server))],
+    subprocess.Popen(cmd + ["--port", str(agent_port(server))],
                      cwd=str(HERE), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      start_new_session=True)
     for _ in range(20):
